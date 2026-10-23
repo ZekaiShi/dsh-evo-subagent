@@ -20,17 +20,18 @@ async function harness(files = {}) {
       listModels: async () => [{ provider: 'registered-provider', id: 'registered-model', name: 'Registered model' }],
     },
     subagents: {
-      async start(provider, request) {
-        starts.push({ provider, request })
+      async startActivation(spec) {
+        const { delivery } = spec
+        if (delivery === 'parent') {
+          continuing.push(spec)
+          return { childId: 'child-1', messageId: 'message-1' }
+        }
+        starts.push(spec)
         return {
-          id: 'run-1',
+          childId: 'run-1',
           result: Promise.resolve({ stopReason: 'completed', output: [{ type: 'text', text: 'done' }] }),
           async dispose() {},
         }
-      },
-      async startContinuable(spec) {
-        continuing.push(spec)
-        return { childId: 'child-1', messageId: 'message-1' }
       },
     },
   }
@@ -50,6 +51,10 @@ test('a valid binding injects only its registered provider/model route', async (
     provider: 'registered-provider', model: 'registered-model',
   })
   assert.equal(h.starts[0].request.prompt[0].text, 'draft')
+  assert.equal(h.starts[0].delivery, 'caller')
+  assert.equal(h.starts[0].signal, exec.signal)
+  assert.equal(Object.hasOwn(h.starts[0].request, 'label'), false)
+  assert.equal(Object.hasOwn(h.starts[0].request, 'signal'), false)
   assert.equal(JSON.stringify(h.starts[0].request).includes('writer'), false)
 })
 
@@ -60,6 +65,7 @@ test('a missing binding omits agentOptions so official spawn inherits the parent
   }, exec)
   assert.equal(Object.hasOwn(h.continuing[0].request, 'agentOptions'), false)
   assert.equal(h.continuing[0].provider, 'spawn')
+  assert.equal(h.continuing[0].delivery, 'parent')
 })
 
 test('an invalid model fails before any spawn provider is called', async () => {

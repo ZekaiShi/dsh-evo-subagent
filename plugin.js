@@ -429,18 +429,27 @@ function partialText(output) {
     .join('')
 }
 
-async function settleForeground(run) {
+async function settleForeground(run, signal) {
   let execution
   let disposal
+  let disposing
+  const dispose = () => (disposing ??= Promise.resolve().then(() => run.dispose()))
+  // Activation signals only cancel startup. A foreground tool owns cancellation
+  // after publication as well, so stop the exact activation when its turn ends.
+  const abort = () => { void dispose().catch(() => {}) }
+  signal.addEventListener('abort', abort, { once: true })
+  if (signal.aborted) abort()
   try {
     execution = await run.result
   } catch (error) {
-    disposal = await Promise.resolve(run.dispose()).then(() => undefined, disposeError => disposeError)
+    disposal = await dispose().then(() => undefined, disposeError => disposeError)
     if (disposal !== undefined) throw new AggregateError([error, disposal], 'subagent result and disposal both failed')
     throw error
+  } finally {
+    signal.removeEventListener('abort', abort)
   }
   try {
-    await run.dispose()
+    await dispose()
   } catch (error) {
     throw new Error('evo-subagent: subagent disposal failed', { cause: error })
   }
@@ -451,7 +460,7 @@ async function settleForeground(run) {
       + (partial.length === 0 ? '' : `\nPartial output before the run ended:\n${partial}`),
     )
   }
-  return { kind: 'foreground', runId: run.id, output: execution.output }
+  return { kind: 'foreground', runId: run.childId, output: execution.output }
 }
 
 async function loadAndInject(evolutionDir, agentKey, basePrompt, legacyEvolutionDir) {
@@ -460,8 +469,8 @@ async function loadAndInject(evolutionDir, agentKey, basePrompt, legacyEvolution
   return block ? basePrompt + block : basePrompt
 }
 
-async function settleForegroundAndRecord(run, agentKey, { evolution, evolutionDir, legacyEvolutionDir }) {
-  const settled = await settleForeground(run)
+async function settleForegroundAndRecord(run, agentKey, { evolution, evolutionDir, legacyEvolutionDir }, signal) {
+  const settled = await settleForeground(run, signal)
   if (evolution) {
     const text = partialText(settled.output)
     const updates = parseEvolutionBlock(text)
@@ -597,7 +606,7 @@ export function createApply(defineTool) {
         },
         run_in_background: {
           type: 'boolean',
-          description: 'Run as a continuable background subagent (default true). Set false to wait for its result.',
+          description: 'Run in the background and receive DSH completion delivery (default true). Set false to wait for the result and record evolution output.',
         },
       },
       output: {
@@ -631,11 +640,11 @@ export function createApply(defineTool) {
         const parent = exec.agent
         if (parent === undefined) throw new Error('evo-subagent: an initiating agent is required')
         // Per-conversation scope: detect the conversation's project workspace
-        // (session cwd → project root → <root>/agents) so subagent routing and
+        // (current session cwd → project root → <root>/agents) so subagent routing and
         // evolution follow the project the conversation is working in, not the
         // process launch directory. Falls back to config / env when the session
         // carries no cwd or the project has no `agents/` folder.
-        const sessionScope = await resolveSessionScope(exec)
+        const sessionScope = await resolveSessionScope(exec, ctx.workingDirectory)
         const effBindingsDir = sessionScope?.bindingsDir ?? bindingsDir
         const effEvolutionDir = sessionScope?.evolutionDir ?? evolutionDir
         const effLegacyEvolutionDir = sessionScope?.legacyEvolutionDir
@@ -663,33 +672,9 @@ export function createApply(defineTool) {
         const template = binding === undefined
           ? bundledTemplate
           : (bundledTemplate === undefined ? undefined : await loadTemplate(effBindingsDir, agentKey))
-        if (binding === undefined && bundledTemplate === undefined) {
-          // No user binding and no built-in template: preserve DSH's native
-          // parent-model inheritance (no agentOptions, no error).
-          const rawPrompt = nonEmpty(args.prompt ?? '', 'prompt')
-          const evolved = state.evolution
-            ? await loadAndInject(effEvolutionDir, agentKey, rawPrompt, effLegacyEvolutionDir)
-            : rawPrompt
-          const request = {
-            label: description,
-            prompt: [{ type: 'text', text: evolved }],
-            parent,
-            maxDepth,
-          }
-          if (args.run_in_background !== false) {
-            const started = await ctx.subagents.startContinuable({
-              provider,
-              label: description,
-              request,
-              signal: exec.signal,
-            })
-            return { kind: 'continuable', subagentId: started.childId }
-          }
-          const run = await ctx.subagents.start(provider, { ...request, signal: exec.signal })
-          return settleForegroundAndRecord(run, agentKey, { evolution: state.evolution, evolutionDir: effEvolutionDir, legacyEvolutionDir: effLegacyEvolutionDir })
-        }
         const route = binding ?? bundledTemplate
-        const agentOptions = await assertRegisteredModel(ctx.llm, route)
+        // Missing routes preserve native parent-model inheritance.
+        const agentOptions = route === undefined ? undefined : await assertRegisteredModel(ctx.llm, route)
         // A bundled template or its workspace copy supplies its role prompt,
         // so the caller may omit `prompt`. An explicit prompt still wins.
         const prompt = args.prompt ?? ''
@@ -700,25 +685,30 @@ export function createApply(defineTool) {
           ? await loadAndInject(effEvolutionDir, agentKey, basePrompt, effLegacyEvolutionDir)
           : basePrompt
         const request = {
-          label: description,
           prompt: [{ type: 'text', text: effectivePrompt }],
           parent,
           maxDepth,
           ...(agentOptions === undefined ? {} : { agentOptions }),
         }
 
-        if (args.run_in_background !== false) {
-          const started = await ctx.subagents.startContinuable({
-            provider,
-            label: description,
-            request,
-            signal: exec.signal,
-          })
+        exec.signal.throwIfAborted()
+        const background = args.run_in_background !== false
+        const started = await ctx.subagents.startActivation({
+          provider,
+          label: description,
+          request,
+          signal: exec.signal,
+          delivery: background ? 'parent' : 'caller',
+        })
+        if (background) {
           return { kind: 'continuable', subagentId: started.childId }
         }
 
-        const run = await ctx.subagents.start(provider, { ...request, signal: exec.signal })
-        return settleForegroundAndRecord(run, agentKey, { evolution: state.evolution, evolutionDir: effEvolutionDir, legacyEvolutionDir: effLegacyEvolutionDir })
+        return settleForegroundAndRecord(started, agentKey, {
+          evolution: state.evolution,
+          evolutionDir: effEvolutionDir,
+          legacyEvolutionDir: effLegacyEvolutionDir,
+        }, exec.signal)
       },
     }))
   }

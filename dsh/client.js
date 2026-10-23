@@ -1,6 +1,6 @@
 // Browser half of the evo-subagent dsh plugin: the Evolution settings card.
 //
-// Renders a plugin card in Settings -> Plugins (the settings.plugin.item
+// Renders a plugin card in Settings -> Plugins (the settings.plugins.tab
 // slot). The card groups every detected subagent by project workspace, shows
 // each agent's current routing provider/model, lets you switch the model with a
 // dropdown (writes the binding .md front matter), edits each agent's hidden
@@ -131,7 +131,7 @@ window.__ModuleLoader__.load({
       }
       var useLocale = () =>
         typeof react.useSyncExternalStore === 'function'
-          ? react.useSyncExternalStore(subscribeLocale, readLocale)
+          ? react.useSyncExternalStore(subscribeLocale, readLocale, readLocale)
           : readLocale()
 
       var chevron = (open) =>
@@ -1095,9 +1095,12 @@ window.__ModuleLoader__.load({
         return
       }
       var Card = CardFactory(react, localeRef)
-      ctx.slots.inject('settings.plugin.item', function* () {
-        yield ctx.slots.register({ name: 'settings.plugin.item', id: 'evo-subagent', key: 'evo-subagent', order: 31 }, Card)
-      })
+      ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
+        name: 'settings.plugins.tab',
+        id: 'evo-subagent',
+        label: 'evo-subagent',
+        order: 31,
+      }, Card))
     }
 
     function apply(ctx) {

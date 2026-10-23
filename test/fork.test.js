@@ -20,19 +20,19 @@ async function harness(files = {}, config = {}) {
       listModels: async () => [{ provider: 'registered-provider', id: 'registered-model', name: 'Registered model' }],
     },
     subagents: {
-      async start(provider, request) {
+      async startActivation(spec) {
+        const { provider, delivery } = spec
         if (provider !== 'fork') throw new Error(`expected fork provider, got ${provider}`)
-        forkStarts.push({ provider, request })
+        if (delivery === 'parent') {
+          forkContinuing.push(spec)
+          return { childId: 'fork-child-1', messageId: 'fork-message-1' }
+        }
+        forkStarts.push(spec)
         return {
-          id: 'fork-run-1',
+          childId: 'fork-run-1',
           result: Promise.resolve({ stopReason: 'completed', output: [{ type: 'text', text: 'forked-done' }] }),
           async dispose() {},
         }
-      },
-      async startContinuable(spec) {
-        if (spec.provider !== 'fork') throw new Error(`expected fork provider, got ${spec.provider}`)
-        forkContinuing.push(spec)
-        return { childId: 'fork-child-1', messageId: 'fork-message-1' }
       },
     },
   }
@@ -77,7 +77,7 @@ test('fork mode: an invalid model fails before any fork provider is called', asy
   assert.equal(h.forkContinuing.length, 0)
 })
 
-test('fork mode: background run uses startContinuable on the fork provider', async () => {
+test('fork mode: background activation delivers results to the parent', async () => {
   const h = await harness({ planner: '---\nprovider: registered-provider\nmodel: registered-model\n---\n' })
   const result = await h.definition.execute({
     agent_key: 'planner', description: 'plan', prompt: 'make a plan', run_in_background: true,
@@ -86,6 +86,7 @@ test('fork mode: background run uses startContinuable on the fork provider', asy
   assert.equal(h.forkStarts.length, 0)
   assert.equal(h.forkContinuing.length, 1)
   assert.equal(h.forkContinuing[0].provider, 'fork')
+  assert.equal(h.forkContinuing[0].delivery, 'parent')
   assert.deepEqual(h.forkContinuing[0].request.agentOptions, {
     provider: 'registered-provider', model: 'registered-model',
   })

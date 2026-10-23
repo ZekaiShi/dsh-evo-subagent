@@ -29,17 +29,13 @@ async function harness(files = {}, config = {}) {
         : [{ provider: 'registered-provider', id: 'registered-model', name: 'Registered model' }],
     },
     subagents: {
-      async start(provider, request) {
-        starts.push({ provider, request })
+      async startActivation(spec) {
+        starts.push(spec)
         return {
-          id: 'run-1',
+          childId: 'run-1',
           result: Promise.resolve({ stopReason: 'completed', output: [{ type: 'text', text: 'done' }] }),
           async dispose() {},
         }
-      },
-      async startContinuable(spec) {
-        starts.push(spec)
-        return { childId: 'child-1', messageId: 'message-1' }
       },
     },
   }
@@ -120,8 +116,7 @@ test('a template with an unregistered model fails before any child is created', 
       listModels: async () => [],
     },
     subagents: {
-      async start() { throw new Error('should not be called') },
-      async startContinuable() { throw new Error('should not be called') },
+      async startActivation() { throw new Error('should not be called') },
     },
   }
   createApply(value => value)(h2, { bindingsDir: h.bindingsDir, templatesDir, provider: 'spawn', toolName: 'evo_subagent', maxDepth: 3 })

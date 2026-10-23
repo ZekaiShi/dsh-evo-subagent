@@ -69,6 +69,19 @@ test('resolveSessionScope: walks up from a nested conversation cwd to the projec
   assert.equal(scope.bindingsDir, join(root, 'agents'))
 })
 
+test('resolveSessionScope follows the current DSH directory instead of the immutable header', async () => {
+  const original = await tmpTree()
+  const current = await tmpTree()
+  await mkdir(join(original, 'agents'))
+  await mkdir(join(current, 'agents'))
+  const session = { header: { cwd: original } }
+  const scope = await resolveSessionScope({ agent: { session } }, {
+    get(value) { assert.equal(value, session); return current },
+  })
+  assert.equal(scope.projectRoot, current)
+  assert.equal(scope.evolutionDir, join(current, '.evo_subagent', 'evolution'))
+})
+
 test('detectProjects finds projects with agents/ folders up to depth', async () => {
   const base = await tmpTree()
   // depth-1 project

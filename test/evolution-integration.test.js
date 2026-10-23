@@ -23,21 +23,17 @@ async function buildHarness({ evolution = true, foregroundOutput = 'done' } = {}
       listModels: async () => [{ provider: 'deepseek-official', id: 'deepseek-v4-flash' }],
     },
     subagents: {
-      async start(provider, request) {
+      async startActivation(spec) {
         const idx = callIdx++
-        starts.push({ provider, request, idx })
+        starts.push({ ...spec, idx })
         const blocks = Array.isArray(foregroundOutput)
           ? foregroundOutput
           : [{ type: 'text', text: foregroundOutput }]
         return {
-          id: `r-${idx}`,
+          childId: `r-${idx}`,
           result: Promise.resolve({ stopReason: 'completed', output: blocks }),
           async dispose() {},
         }
-      },
-      async startContinuable(spec) {
-        starts.push(spec)
-        return { childId: 'bg-1', messageId: 'm-1' }
       },
     },
   }
@@ -550,15 +546,14 @@ test('execute auto-provisions a bound workspace on first use', async () => {
       listModels: async () => [{ provider: 'deepseek-official', id: 'deepseek-v4-flash' }],
     },
     subagents: {
-      async start(provider, request) {
-        starts.push(request)
+      async startActivation(spec) {
+        starts.push(spec.request)
         return {
-          id: 'r-1',
+          childId: 'r-1',
           result: Promise.resolve({ stopReason: 'completed', output: [{ type: 'text', text: 'done' }] }),
           async dispose() {},
         }
       },
-      async startContinuable(spec) { starts.push(spec); return { childId: 'bg-1', messageId: 'm-1' } },
     },
   }
   createApply(v => v)(ctx, {
@@ -600,15 +595,14 @@ test('execute auto-provisioning is skipped when evolution is disabled', async ()
       listModels: async () => [{ provider: 'deepseek-official', id: 'deepseek-v4-flash' }],
     },
     subagents: {
-      async start(provider, request) {
-        starts.push(request)
+      async startActivation(spec) {
+        starts.push(spec.request)
         return {
-          id: 'r-1',
+          childId: 'r-1',
           result: Promise.resolve({ stopReason: 'completed', output: [{ type: 'text', text: 'done' }] }),
           async dispose() {},
         }
       },
-      async startContinuable(spec) { starts.push(spec); return { childId: 'bg-1', messageId: 'm-1' } },
     },
   }
   createApply(v => v)(ctx, {
@@ -646,17 +640,13 @@ test('execute uses the conversation workspace scope for bindings + evolution', a
       listModels: async () => [{ provider: 'deepseek-official', id: 'deepseek-v4-flash' }],
     },
     subagents: {
-      async start(provider, request) {
-        starts.push(request)
+      async startActivation(spec) {
+        starts.push(spec.request)
         return {
-          id: 'r-1',
+          childId: 'r-1',
           result: Promise.resolve({ stopReason: 'completed', output: [{ type: 'text', text: 'done' }] }),
           async dispose() {},
         }
-      },
-      async startContinuable(spec) {
-        starts.push(spec)
-        return { childId: 'bg-1', messageId: 'm-1' }
       },
     },
   }

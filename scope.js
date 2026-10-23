@@ -65,18 +65,22 @@ export async function findAgentsDir(cwd, maxUp = 20) {
 
 /**
  * Resolve the per-conversation project scope from the tool exec context. The
- * conversation's working directory (`exec.agent.session.header.cwd`, the same
- * field dsh-tool-bash uses to resolve its workdir) is walked up to the nearest
+ * conversation's current working directory (from DSH's workingDirectory
+ * service, falling back to the original Session header) is walked up to the nearest
  * `agents/` folder; evolution then lives under `<root>/.evo_subagent/
  * evolution`. Returns undefined when there is no session cwd or no project
  * `agents/` dir, in which case callers fall back to config / env. The former
  * `.smart_subagent/evolution` path is returned read-only for migration.
  *
  * @param {{ agent?: { session?: { header?: { cwd?: string } } } }} exec
+ * @param {{ get(session: object): string }} [workingDirectory]
  * @returns {Promise<{cwd: string, projectRoot: string, projectName: string, bindingsDir: string, evolutionDir: string, legacyEvolutionDir: string} | undefined>}
  */
-export async function resolveSessionScope(exec) {
-  const cwd = exec?.agent?.session?.header?.cwd
+export async function resolveSessionScope(exec, workingDirectory) {
+  const session = exec?.agent?.session
+  const cwd = session !== undefined && workingDirectory !== undefined
+    ? workingDirectory.get(session)
+    : session?.header?.cwd
   if (typeof cwd !== 'string' || cwd.length === 0) return undefined
   const found = await findAgentsDir(cwd)
   if (found === undefined) return undefined
