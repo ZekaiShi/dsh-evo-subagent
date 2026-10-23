@@ -6,7 +6,7 @@
 
 [![npm version](https://img.shields.io/npm/v/evo-subagent.svg)](https://www.npmjs.com/package/evo-subagent)
 [![license](https://img.shields.io/npm/l/evo-subagent.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?logo=node.js&logoColor=white)](package.json)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24.2.0-339933?logo=node.js&logoColor=white)](package.json)
 
 ## Downloads
 
@@ -30,7 +30,7 @@ It maps stable agent roles to registered provider/model pairs, remembers verifie
 
 ## Installation
 
-Requires DeepSeek Harness `0.1.5-rc.3` or newer and Node.js `>=24.2.0`.
+Version `0.8.x` requires DeepSeek Harness `0.2.1-rc.2` (supported range: `^0.2.1-rc.2`) and Node.js `>=24.2.0`. For DSH `0.1.5-rc.3`, use plugin version `0.7.0`.
 
 ```sh
 dsh plugin add evo-subagent
@@ -40,16 +40,31 @@ dsh plugin add evo-subagent
 
 ![Open and manage evo-subagent in DSH](assets/evo-subagent-tutorial.gif)
 
-1. Open **Settings → Plugins** and expand **evo-subagent**.
+1. Open **More (bottom-left) → Settings → Built-in plugins → evo-subagent** and expand the configuration card. This is inside Settings, not the standalone Plugins page in the main sidebar.
 2. Select a workspace and add a built-in role, or place a custom binding in its `agents/` directory.
 3. Choose a registered provider/model pair for each custom binding.
 4. Expand an agent to review its `prefercmd.md` and `memory.md` evolution files.
 
 [Download the MP4 tutorial](assets/evo-subagent-tutorial.mp4)
 
+The 25-second walkthrough uses a demo workspace on DSH `0.2.1-rc.2`. The settings panel is enlarged after the navigation steps; demo provider/model names are illustrative, not additional built-in models.
+
 ## Changelog
 
 New entries are added at the top for every maintained release.
+
+### 2026-10-23 — Tutorial refresh
+
+- Replaced the GIF and MP4 with a walkthrough of the current settings location.
+- Clarified the full path from the bottom-left More menu and distinguished it from the standalone Plugins page.
+- Documentation and media update only; no new npm release.
+
+### 0.8.0 — 2026-10-21
+
+- Adapted subagent startup to DSH `0.2.1-rc.2`'s managed activation API, including foreground cancellation and background completion delivery.
+- Moved the configuration card to its own **evo-subagent** tab on the new Plugins settings page.
+- Now follows the session's current working directory when resolving project bindings and evolution files.
+- Updated the supported DSH/Cordis versions and added checks against the real DSH tool, activation, and skill services.
 
 ### 0.7.0 — 2026-09-27
 
@@ -154,6 +169,8 @@ memory:
 ```
 
 Entries are deduplicated and bounded. Prefix an entry with `!` to keep it at highest priority, or `?` to make it compressible when the context budget is tight.
+
+Background tasks use DSH's parent completion delivery. Use `run_in_background: false` to wait for the result and save returned evolution entries. Cancelling a foreground call also stops its child activation.
 
 Legacy `.smart_subagent/evolution` data remains a read-only fallback and is copied to the new location on the next save.
 

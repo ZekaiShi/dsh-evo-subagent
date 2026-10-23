@@ -6,7 +6,7 @@
 
 [![npm version](https://img.shields.io/npm/v/evo-subagent.svg)](https://www.npmjs.com/package/evo-subagent)
 [![license](https://img.shields.io/npm/l/evo-subagent.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?logo=node.js&logoColor=white)](package.json)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24.2.0-339933?logo=node.js&logoColor=white)](package.json)
 
 ## 下载趋势
 
@@ -30,7 +30,7 @@
 
 ## 安装
 
-需要 DeepSeek Harness `0.1.5-rc.3` 或更高版本，以及 Node.js `>=24.2.0`。
+`0.8.x` 需要 DeepSeek Harness `0.2.1-rc.2`（支持范围：`^0.2.1-rc.2`）以及 Node.js `>=24.2.0`。仍使用 DSH `0.1.5-rc.3` 时，请安装插件 `0.7.0`。
 
 ```sh
 dsh plugin add evo-subagent
@@ -40,16 +40,31 @@ dsh plugin add evo-subagent
 
 ![在 DSH 中打开并管理 evo-subagent](assets/evo-subagent-tutorial.gif)
 
-1. 打开 **设置 → 插件**，展开 **evo-subagent**。
+1. 打开 **左下角更多 → 设置 → 内置插件 → evo-subagent**，展开配置卡片。入口在设置内，不是主侧栏单独的“插件”页面。
 2. 选择工作区并添加内置角色，或把自定义绑定放入该工作区的 `agents/` 目录。
 3. 为每个自定义绑定选择已经注册的 provider/model 组合。
 4. 展开 Agent，即可查看其 `prefercmd.md` 与 `memory.md` 进化文件。
 
 [下载 MP4 教程](assets/evo-subagent-tutorial.mp4)
 
+这段约 25 秒的教程使用 DSH `0.2.1-rc.2` 中的演示工作区；进入设置后会放大面板，方便阅读。演示中的 provider/model 名称仅作示例，不代表新增内置模型。
+
 ## 更新日志
 
 每次维护发布都会在顶部增加一条更新记录。
+
+### 2026-10-23 — 教程更新
+
+- 替换 GIF 和 MP4 教程，演示当前版本的设置入口。
+- 补全从左下角“更多”开始的操作路径，明确它与主侧栏“插件”页面的区别。
+- 本次仅更新文档与媒体，不发布新的 npm 版本。
+
+### 0.8.0 — 2026-10-21
+
+- 适配 DSH `0.2.1-rc.2` 的统一子代理启动接口，支持前台取消和后台完成通知。
+- 将配置卡片迁移到新版插件设置页的独立 **evo-subagent** 标签。
+- 根据会话当前工作目录定位项目绑定与进化文件，支持切换工作目录后的路由。
+- 更新 DSH/Cordis 兼容范围，并增加真实 DSH 工具、子代理与技能服务的验证。
 
 ### 0.7.0 — 2026-09-27
 
@@ -154,6 +169,8 @@ memory:
 ```
 
 条目会去重并限制数量。使用 `!` 前缀标记最高优先级，使用 `?` 标记可在上下文紧张时压缩的条目。
+
+后台任务由 DSH 向父 Agent 发送完成通知。使用 `run_in_background: false` 可等待结果并保存返回的进化条目；取消前台调用时也会停止对应子代理。
 
 旧 `.smart_subagent/evolution` 数据仍可只读回退，并会在下次保存时复制到新目录。
 
