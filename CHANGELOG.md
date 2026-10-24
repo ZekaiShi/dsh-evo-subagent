@@ -4,9 +4,10 @@
 
 ### English
 
-**Your assistant, your style, with a profile for every project.**
+**Give your assistant a personality and a style that grows with you.**
 
-- Added companion personas: choose from five presets or let the interaction style gradually adapt to your feedback.
+- Added companion persona and adaptive style modes: choose from five presets, or explore a style that gradually adapts to your feedback.
+- Added background style learning to refine tone, detail and interaction using your explicit conversation feedback.
 - Added user habits: keep communication preferences in one editable summary and approve new suggestions before they take effect.
 - Added independent scopes for persona and habits: share everywhere, within a workspace, or keep each conversation separate.
 - Refreshed settings with consistent animations, readable dark/light menus and complete Chinese/English interfaces.
@@ -14,9 +15,10 @@
 
 ### 中文
 
-**按你喜欢的方式相处，也为不同项目保留各自的人格。**
+**给你的助手一点性格，让每次对话更合拍。**
 
-- 新增陪伴人格：五种预设可选，也可以根据你的反馈逐渐调整相处风格。
+- 新增陪伴人格与自适应风格模式：五种预设可选，也可以自主探索，逐渐找到适合你的相处方式。
+- 支持后台自主风格学习，根据你的明确对话反馈调整语气、详略与互动方式。
 - 新增用户习惯：用一段可编辑摘要管理交流偏好，新的建议经你确认后生效。
 - 人格与习惯分别支持全局共享、工作区独立、对话独立。
 - 更新设置界面：统一动效，改善深浅主题菜单可读性，补齐中英文体验。

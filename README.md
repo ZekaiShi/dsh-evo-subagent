@@ -7,17 +7,23 @@
 [![npm](https://img.shields.io/npm/v/evo-subagent.svg)](https://www.npmjs.com/package/evo-subagent)
 [![License](https://img.shields.io/npm/l/evo-subagent.svg)](LICENSE)
 
-**An assistant that works in different roles, learns from experience, and adapts to how you like to talk.**
+**Give your DeepSeek a personality. Let its style grow with you.**
 
-evo-subagent 1.0 brings companion personas, user preferences and subagent teamwork together in DeepSeek Harness. Share one profile everywhere, or give each project or conversation its own personality.
+**Adaptive style · Companion personas · Learn from conversation feedback**
+
+evo-subagent 1.0 gives your DeepSeek Harness assistant an interaction style you can choose and refine. Start warm, playful, calm or direct, then let clear feedback shape how it responds. Keep that familiar style across projects, or give every workspace and conversation its own personality.
+
+Enjoy the personality of the DSH community's [Bilibili-browsing “big blue whale” companions](https://github.com/c1overzz/dsh-bili-scroll)? Choose how your own assistant connects with you, and bring more character to everyday conversations.
 
 ## What you can do
 
 | Feature | What it does |
 | --- | --- |
-| Companion persona | Choose a preset or let your assistant gradually adapt its interaction style. |
-| User habits | Keep your preferred language, tone and answer style in one editable summary. |
-| Subagent management | Give different roles their own models and help them reuse lessons from previous tasks. |
+| Adaptive style | Prefer concise, playful or detailed replies? Let explicit feedback gradually shape tone, detail and interaction. |
+| Companion personas | Choose a warm companion, calm thinker, playful partner, concise helper or patient guide. |
+| Style learning | Review conversation feedback in the background and gradually refine how your assistant responds. |
+| Preference memory | Keep the communication preferences you approve, shared across conversations or separate for each project. |
+| Role-based teamwork | A companion to talk with and a team to work with: give roles their own models and reusable task experience. |
 
 ## Install
 
@@ -35,10 +41,14 @@ Open DSH's **plugin settings** and select **evo-subagent**. The page has three s
 
 Choose a sharing scope and, if needed, the workspace or conversation to configure. Enable **Companion persona**, then choose:
 
-- **Fixed preset:** warm companion, calm and rational, light and playful, direct and concise, or patient guide.
-- **Autonomous exploration:** start from a preset and gradually refine the interaction style using your explicit feedback.
+- **Companion persona mode (Fixed preset):** choose a warm, calm, playful, direct or patient style for a familiar conversational tone.
+- **Adaptive style mode (Autonomous exploration):** start from a preset, explore small style variations and refine them using your explicit feedback.
 
-Turn on **Get to know me** to allow background learning. You can review new memories, pause learning, forget preferences or restore a previous style.
+Want the style to take shape as you talk? Choose **Autonomous exploration** and turn on **Get to know me** for **style learning**: your assistant reviews conversation feedback in the background and gradually adjusts its expression. Give it a direction, for example:
+
+> Be more playful in everyday chats, get straight to the point when coding, and listen before offering advice when I talk about a difficult day.
+
+You approve new lasting memories and can pause learning, forget preferences or restore a previous style whenever you want.
 
 ### User habits
 
@@ -74,7 +84,7 @@ Existing model routes and project experience remain available when upgrading to 
 
 ## What's new in 1.0
 
-- Companion personas with presets and adaptive interaction styles.
+- Companion personas and adaptive styles, with presets, autonomous exploration and learning from conversation feedback.
 - One editable summary of your communication preferences.
 - Independent global, workspace and conversation profiles.
 - A simpler settings page with consistent animations, readable dark-theme menus, and Chinese/English interfaces.
