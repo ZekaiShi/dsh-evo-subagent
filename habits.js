@@ -1,7 +1,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { join } from 'node:path'
 import { HabitsError, HabitsStore, HABIT_CATEGORIES, habitsContext } from './habits-store.js'
-import { ScopeProfiles, SharingError, isChildSession } from './sharing.js'
+import { ScopeProfiles, SharingError, isChildSession, markExternalPrompt } from './sharing.js'
 
 export const name = 'evo-user-habits'
 export const inject = ['tools', 'systemPrompt']
@@ -36,6 +36,7 @@ export function createHabitsApply(toolFactory = defineTool) {
     const evidence = new WeakMap()
     ctx.provide('userHabits', { read: agent => profiles.current(agent).store?.read() })
     ctx.on('agent/inbox/claimed', ({ agent, message }) => {
+      if (markExternalPrompt(agent?.session, message)) { evidence.delete(agent.session); return }
       if (!agent?.session || isChildSession(agent.session)) return
       if (message?.role === 'user' && message.source?.kind === 'user') {
         // Even an image-only or fully quoted message supersedes the previous
@@ -65,6 +66,7 @@ export function createHabitsApply(toolFactory = defineTool) {
       isConcurrencySafe: args => args.action === 'read',
       async execute(args, exec) {
         exec.signal.throwIfAborted()
+        if (args.action === 'propose' && isChildSession(exec.agent?.session)) throw new HabitsError('A proposal needs an exact excerpt from this top-level agent\'s latest human message', 403)
         const selected = profiles.current(exec.agent), store = selected.store
         if (!store) throw new HabitsError('Open a conversation with a known workspace before using scoped preferences', 409)
         if (args.action === 'read') {

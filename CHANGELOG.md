@@ -1,5 +1,23 @@
 # Changelog / 更新日志
 
+## 1.1.0 — 2026-10-24
+
+### English
+
+- Give individual workspaces their own persona name, preset and style guidance while keeping shared defaults elsewhere.
+- Choose workspace or conversation independence directly beside the conversation input, including before the first message.
+- Saved persona settings apply to subsequent responses immediately. Independent learning stays in its selected profile and does not update the global persona.
+- Optionally link dsh-bili-scroll to retain video notes in one workspace and include its persona and content memory in later runs. Existing comment and messaging choices are preserved.
+- Refocused the user guide on workspace styles and persona assignments; Bilibili companions are an optional integration.
+
+### 中文
+
+- 为指定工作区单独设置人格名称、预设和风格要求，其余工作区仍可沿用共享默认设置。
+- 对话输入框旁新增人格入口，新建或已有对话均可选择工作区独立或仅当前对话独立。
+- 保存后后续回复即时采用新设置，独立学习只更新当前档案，不回写全局人格。
+- 可选关联刷 B 站插件，将视频笔记保存在一个工作区，并在后续任务中使用该人格与内容记忆；保留已有评论和私信设置。
+- 使用说明重新以工作区风格与人格分配为主线，大肥鱼作为附加联动功能。
+
 ## 1.0.0 — 2026-10-24
 
 ### English

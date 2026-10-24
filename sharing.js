@@ -6,11 +6,22 @@ import { mkdir, open, rename, unlink } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 
 export const SHARING_MODES = Object.freeze(['global', 'workspace', 'conversation'])
+export const BILI_PROMPT_START = '<!-- evo-subagent:bili:v1:start -->'
+const externalSessions = new WeakSet()
+export function markExternalPrompt(session, message) {
+  if (session && message?.role === 'user' && message.source?.kind === 'user') {
+    if ((message.content ?? []).some(block => block.type === 'text' && block.text.includes(BILI_PROMPT_START))) externalSessions.add(session)
+    else externalSessions.delete(session)
+  }
+  return !!session && externalSessions.has(session)
+}
 const FEATURES = ['persona', 'habits']
 const digest = value => createHash('sha256').update(value).digest('hex')
 export class SharingError extends Error { constructor(message, status = 400) { super(message); this.status = status } }
 export function profileBase(home) { return join(resolve(home ?? (process.env.DSH_HOME?.trim() || join(homedir(), '.dsh'))), 'evo-subagent') }
 const initial = () => ({ version: 1, modes: { persona: 'global', habits: 'global' }, controls: { persona: 0, habits: 0 }, budget: null })
+const routes = state => state.assignments ?? { persona: { workspace: {}, conversation: {} }, habits: { workspace: {}, conversation: {} } }
+const stampFor = (state, feature) => digest(JSON.stringify([feature, state.modes[feature], state.controls[feature], routes(state)[feature]]))
 
 // This policy/usage file is outside each persona's four maintained documents.
 // Scope stamps deliberately exclude usage: a budget reservation must not make
@@ -21,18 +32,23 @@ export class SharingStore {
     let state
     try {
       const info = lstatSync(this.filename)
-      if (!info.isFile() || info.isSymbolicLink() || info.size > 4096) throw new SharingError('Invalid sharing policy; existing file preserved', 422)
+      if (!info.isFile() || info.isSymbolicLink() || info.size > 65536) throw new SharingError('Invalid sharing policy; existing file preserved', 422)
       state = JSON.parse(readFileSync(this.filename, 'utf8'))
     } catch (error) { if (error.code === 'ENOENT') return initial(); if (error instanceof SharingError) throw error; throw new SharingError('Cannot read sharing policy; existing file preserved', 422) }
-    if (state?.version !== 1 || !FEATURES.every(key => SHARING_MODES.includes(state.modes?.[key]) && Number.isSafeInteger(state.controls?.[key]) && state.controls[key] >= 0)
+    if (![1, 2].includes(state?.version) || (state.version === 2 && !state.assignments) || !FEATURES.every(key => SHARING_MODES.includes(state.modes?.[key]) && Number.isSafeInteger(state.controls?.[key]) && state.controls[key] >= 0)
       || !(state.budget === null || (typeof state.budget?.day === 'string' && ['calls', 'reservedOutput'].every(key => Number.isSafeInteger(state.budget[key]) && state.budget[key] >= 0)))) {
       throw new SharingError('Invalid sharing policy; existing file preserved', 422)
     }
+    if (!FEATURES.every(feature => ['workspace', 'conversation'].every(kind => {
+      const table = routes(state)[feature]?.[kind]
+      return table && typeof table === 'object' && !Array.isArray(table) && Object.keys(table).length <= 200
+        && Object.entries(table).every(([id, mode]) => /^[a-f0-9]{64}$/.test(id) && SHARING_MODES.includes(mode))
+    }))) throw new SharingError('Invalid persona assignments; existing file preserved', 422)
     return state
   }
   snapshot(feature) {
     const state = this.read()
-    return { mode: state.modes[feature], customized: state.controls[feature] > 0, revision: digest(JSON.stringify([feature, state.modes[feature], state.controls[feature]])) }
+    return { mode: state.modes[feature], customized: state.controls[feature] > 0, revision: stampFor(state, feature), assignments: routes(state)[feature] }
   }
   async update(fn, signal) {
     signal?.throwIfAborted()
@@ -51,7 +67,7 @@ export class SharingStore {
       const state = this.read(), stamp = JSON.stringify(state)
       fn(state)
       const content = JSON.stringify(state, null, 2) + '\n'
-      if (Buffer.byteLength(content) > 4096) throw new SharingError('Sharing policy is too large')
+      if (Buffer.byteLength(content) > 65536) throw new SharingError('Sharing policy is too large')
       temporary = this.filename + '.' + randomUUID() + '.tmp'
       const file = await open(temporary, 'wx', 0o600)
       try { await file.writeFile(content, 'utf8'); await file.sync() } finally { await file.close() }
@@ -63,9 +79,25 @@ export class SharingStore {
   async set(feature, mode, revision, signal) {
     if (!FEATURES.includes(feature) || !SHARING_MODES.includes(mode)) throw new SharingError('Invalid sharing scope')
     await this.update(state => {
-      const stamp = digest(JSON.stringify([feature, state.modes[feature], state.controls[feature]]))
+      const stamp = stampFor(state, feature)
       if (stamp !== revision) throw new SharingError('Sharing scope changed; reload before saving', 409)
       state.modes[feature] = mode; state.controls[feature]++
+    }, signal)
+  }
+  async assign(feature, kind, id, mode, revision, signal) {
+    if (!FEATURES.includes(feature) || !['workspace', 'conversation'].includes(kind) || !/^[a-f0-9]{64}$/.test(id)
+      || ![...SHARING_MODES, 'inherit'].includes(mode)) throw new SharingError('Invalid persona assignment')
+    await this.update(state => {
+      if (stampFor(state, feature) !== revision) throw new SharingError('Sharing scope changed; reload before saving', 409)
+      state.assignments ??= routes(state)
+      // Older releases must fail closed instead of ignoring an independent
+      // assignment and writing that conversation's learning into global data.
+      state.version = 2
+      const table = state.assignments[feature][kind]
+      if (mode === 'inherit') delete table[id]
+      else table[id] = mode
+      if (Object.keys(table).length > 200) throw new SharingError('At most 200 independent assignments per scope')
+      state.controls[feature]++
     }, signal)
   }
   async reserve(tokens, limits, seed, signal) {
@@ -154,6 +186,15 @@ export class ScopeProfiles {
     }
     return [...values.values()].slice(0, 200)
   }
+  workspaceTarget(id) {
+    for (const item of this.registered()) if (digest(item.path) === id) return { ...item, id }
+    for (const session of this.services.sessions?.list() ?? []) {
+      if (isChildSession(session)) continue
+      const workspace = this.workspace(session)
+      if (workspace && digest(workspace.path) === id) return { ...workspace, id }
+    }
+    throw new SharingError('Selected workspace is unavailable', 404)
+  }
   selection(policy, target) {
     if (policy.mode !== 'global' && !target) return { ...policy, store: null, id: '' }
     const id = policy.mode === 'global' ? 'global' : target.id
@@ -162,16 +203,57 @@ export class ScopeProfiles {
   }
   current(agent) {
     const policy = this.policy.snapshot(this.feature)
-    return this.selection(policy, policy.mode === 'global' ? undefined : this.describe(agent?.session, policy.mode))
+    const root = this.rootSession(agent?.session)
+    if ((root && externalSessions.has(root)) || (isChildSession(agent?.session) && !root)) return this.selection({ ...policy, mode: 'conversation' })
+    const workspace = this.describe(agent?.session, 'workspace'), conversation = this.describe(agent?.session, 'conversation')
+    const mode = (conversation && policy.assignments.conversation[conversation.id]) ?? (workspace && policy.assignments.workspace[workspace.id]) ?? policy.mode
+    return this.selection({ ...policy, mode }, mode === 'global' ? undefined : mode === 'workspace' ? workspace : conversation)
+  }
+  sessionContext(id) {
+    if (typeof id !== 'string' || id.length > 160) throw new SharingError('Invalid conversation')
+    const session = this.services.sessions?.get(id), root = this.rootSession(session)
+    if (!root || isChildSession(session)) throw new SharingError('Open the main conversation before changing its persona', 404)
+    const workspace = this.describe(root, 'workspace'), conversation = this.describe(root, 'conversation')
+    if (!workspace || !conversation) throw new SharingError('Choose a workspace first', 409)
+    const selected = this.current({ session: root })
+    return { session: root, workspace, conversation, selected, workspacePath: this.workspace(root).path }
+  }
+  async setSessionScope(id, scope, revision, signal) {
+    if (!['inherit', 'workspace', 'conversation'].includes(scope)) throw new SharingError('Invalid conversation scope')
+    const context = this.sessionContext(id)
+    await this.policy.update(state => {
+      if (stampFor(state, this.feature) !== revision) throw new SharingError('Sharing scope changed; reload before saving', 409)
+      if (this.sessionContext(id).workspace.id !== context.workspace.id) throw new SharingError('Conversation workspace changed; reload', 409)
+      state.assignments ??= routes(state)
+      state.version = 2
+      const assignment = state.assignments[this.feature]
+      if (scope === 'conversation') assignment.conversation[context.conversation.id] = 'conversation'
+      else {
+        delete assignment.conversation[context.conversation.id]
+        if (scope === 'workspace') assignment.workspace[context.workspace.id] = 'workspace'
+      }
+      if (Object.keys(assignment.workspace).length > 200 || Object.keys(assignment.conversation).length > 200) throw new SharingError('At most 200 independent assignments per scope')
+      state.controls[this.feature]++
+    }, signal)
+    const current = this.sessionContext(id)
+    if (current.workspace.id !== context.workspace.id) throw new SharingError('Conversation workspace changed; reload', 409)
+    return current
   }
   forRequest(request, clear = false) {
-    const policy = this.policy.snapshot(this.feature), options = policy.mode === 'global' ? [] : this.catalog(policy.mode)
-    const id = clear ? '' : new URL(request.url).searchParams.get('target') || ''
-    if (policy.mode === 'global' && id && id !== 'global') throw new SharingError('Sharing scope changed; reload before saving', 409)
+    const policy = this.policy.snapshot(this.feature), query = new URL(request.url).searchParams
+    const mode = clear ? policy.mode : query.get('scope') || policy.mode
+    if (!SHARING_MODES.includes(mode)) throw new SharingError('Invalid profile scope')
+    const options = mode === 'global' ? [] : this.catalog(mode)
+    const id = clear ? '' : query.get('target') || ''
+    if (mode === 'global' && id && id !== 'global') throw new SharingError('Sharing scope changed; reload before saving', 409)
     const target = options.find(x => x.id === id)
-    if (id && !target && policy.mode !== 'global') throw new SharingError('Selected workspace or conversation is unavailable; open it in DSH and reload', 404)
-    const selected = this.selection(policy, target)
-    return { ...selected, sharing: { ...policy, options, selectedId: selected.id, selectionRequired: !selected.store } }
+    if (id && !target && mode !== 'global') throw new SharingError('Selected workspace or conversation is unavailable; open it in DSH and reload', 404)
+    const selected = this.selection({ ...policy, mode }, target)
+    const assignedMode = target ? policy.assignments[mode]?.[target.id] : undefined
+    const { assignments: _assignments, ...publicPolicy } = policy
+    return { ...selected, sharing: { ...publicPolicy, mode, defaultMode: policy.mode, options, selectedId: selected.id, selectionRequired: !selected.store,
+      assignedMode: assignedMode ?? 'inherit', appliedMode: assignedMode ?? policy.mode, independent: (assignedMode ?? policy.mode) !== 'global',
+      workspaceOptions: this.feature === 'persona' ? this.catalog('workspace') : undefined } }
   }
   assertWrite(input, selected) {
     if ((input.sharingRevision !== undefined && input.sharingRevision !== selected.revision)

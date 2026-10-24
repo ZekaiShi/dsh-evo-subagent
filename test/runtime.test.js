@@ -164,7 +164,7 @@ test('the browser bundle registers a renderable tab on the new DSH Plugins page'
   const ctx = {
     inject(names, callback) { if (names[0] === 'slots') callback(ctx) },
     slots: {
-      inject(name, callback) { assert.equal(name, 'settings.plugins.tab'); return callback() },
+      inject(name, callback) { assert.ok(['settings.plugins.tab', 'conversation.input.left'].includes(name)); return callback() },
       register(options, component) { registrations.push({ options, component }) },
     },
   }
@@ -174,8 +174,9 @@ test('the browser bundle registers a renderable tab on the new DSH Plugins page'
   })
   module.apply(ctx)
   await new Promise(resolve => setImmediate(resolve))
-  assert.equal(registrations.length, 1)
+  assert.equal(registrations.length, 2)
   assert.equal(registrations[0].options.name, 'settings.plugins.tab')
+  assert.equal(registrations[1].options.name, 'conversation.input.left')
   assert.equal(registrations[0].options.label, 'evo-subagent')
   const html = renderToStaticMarkup(react.createElement(registrations[0].component))
   assert.match(html, /Subagent management/)

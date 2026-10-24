@@ -7,18 +7,18 @@
 [![npm](https://img.shields.io/npm/v/evo-subagent.svg)](https://www.npmjs.com/package/evo-subagent)
 [![License](https://img.shields.io/npm/l/evo-subagent.svg)](LICENSE)
 
-**Give your DeepSeek a personality. Let its style grow with you.**
+**Different workspaces, distinct personas. A style that fits each project and conversation.**
 
-**Adaptive style · Companion personas · Learn from conversation feedback**
+**Style across workspaces · Independent personas · Switch within a conversation**
 
-evo-subagent 1.0 gives your DeepSeek Harness assistant an interaction style you can choose and refine. Start warm, playful, calm or direct, then let clear feedback shape how it responds. Keep that familiar style across projects, or give every workspace and conversation its own personality.
-
-Enjoy the personality of the DSH community's [Bilibili-browsing “big blue whale” companions](https://github.com/c1overzz/dsh-bili-scroll)? Choose how your own assistant connects with you, and bring more character to everyday conversations.
+evo-subagent 1.1 helps your DeepSeek Harness assistant fit the project: efficient and direct for development, thoughtful and independent for discussion, warm for everyday conversation. Share a familiar style across workspaces or assign a separate persona to each workspace and conversation. Independent profiles keep their style learning local without updating the global persona.
 
 ## What you can do
 
 | Feature | What it does |
 | --- | --- |
+| Workspace personas | Give each project its own persona name, preset and style guidance. |
+| Independent conversations | Choose a separate persona beside the input box and keep its style and learning within that conversation. |
 | Adaptive style | Prefer concise, playful or detailed replies? Let explicit feedback gradually shape tone, detail and interaction. |
 | Companion personas | Choose a warm companion, calm thinker, playful partner, concise helper or patient guide. |
 | Style learning | Review conversation feedback in the background and gradually refine how your assistant responds. |
@@ -36,6 +36,16 @@ Requires DeepSeek Harness `^0.2.1-rc.2` and Node.js `>=24.2.0`.
 ## Get started
 
 Open DSH's **plugin settings** and select **evo-subagent**. The page has three sections; enable only the features you want.
+
+### Assign a workspace persona
+
+Open **Companion persona → Workspace personas**, choose a project and check **Maintain a separate persona for this workspace**. Set its name, preset and style guidance, such as “Efficient colleague: lead with a plan and retain independent judgment.”
+
+Saved settings apply to subsequent responses immediately. Changes and learning stay in that workspace without updating the global persona.
+
+### Start or switch an independent conversation
+
+Open **Persona** beside the conversation input and choose **Independent workspace** or **This conversation only**. Adjust its preset, guidance and learning switch there. The control is available before the first message and in existing conversations. New independent profiles start with background learning off until you enable it.
 
 ### Companion persona
 
@@ -74,28 +84,33 @@ Persona and user habits have **separate scope selectors**. For example, keep one
 | Separate by workspace | Conversations in a workspace share a profile; different projects stay independent. |
 | Separate by conversation | Each conversation in each workspace has its own profile. |
 
-Switching scope keeps your saved profiles. New independent profiles start with the features off; select a target and configure it before use. To configure an older conversation, open it in DSH and refresh the list.
+Switching scope keeps your saved profiles. Keep shared defaults while assigning independence only to selected workspaces or conversations. To configure an older conversation, open it in DSH and refresh the list.
 
 ## Your data and controls
 
 Profiles stay in your local DSH user directory. When persona learning is enabled, short conversation excerpts are sent to the selected model for background processing, which adds model usage. You approve new lasting memories and can pause or disable learning at any time.
 
-Existing model routes and project experience remain available when upgrading to 1.0.
+Existing model routes, project experience and persona profiles remain available after upgrading.
 
-## What's new in 1.0
+## What's new in 1.1
 
-- Companion personas and adaptive styles, with presets, autonomous exploration and learning from conversation feedback.
-- One editable summary of your communication preferences.
-- Independent global, workspace and conversation profiles.
-- A simpler settings page with consistent animations, readable dark-theme menus, and Chinese/English interfaces.
+- Workspace persona names, custom style guidance and individual assignments.
+- A persona picker beside the input box, including independent conversation learning.
+- Optional integration with the Bilibili plugin to retain video notes in a chosen workspace for future tasks.
 
-[Full changelog](CHANGELOG.md) · [Release notes](https://github.com/ZekaiShi/evo-subagent/releases/tag/v1.0.0)
+[Full changelog](CHANGELOG.md) · [Release notes](https://github.com/ZekaiShi/evo-subagent/releases)
 
 ## Walkthrough
 
 ![Subagent management walkthrough](assets/evo-subagent-tutorial.gif)
 
 [Watch the subagent-management video](assets/evo-subagent-tutorial.mp4). This walkthrough covers role configuration; the persona and habits sections were added in 1.0.
+
+## Optional: content memory for your Bilibili companion
+
+Configure [dsh-bili-scroll](https://github.com/c1overzz/dsh-bili-scroll) and keep its reports enabled. In an independent workspace's persona settings, open **Optional: Bilibili content learning** and select **Link this workspace**.
+
+Video notes are retained in that workspace and supplied alongside its persona to later Bilibili runs. They are reference material, not user preferences or persona values. Sync, forget notes or disconnect whenever you want; comment and messaging settings remain controlled by the Bilibili plugin.
 
 ## Downloads
 

@@ -8,7 +8,7 @@ const require = createRequire(import.meta.url)
 async function browserModule(react, options = {}) {
   const registrations = []; let module
   const ctx = { inject(names, callback) { if (names[0] === 'slots') callback(ctx); if (names[0] === 'locale' && options.locale) callback({ ...ctx, locale: options.locale }) },
-    slots: { inject(_name, callback) { return callback() }, register(_options, component) { registrations.push(component) } } }
+    slots: { inject(_name, callback) { return callback() }, register(_options, component) { registrations.push(component); options.registrations?.push({ name: _options.name, component }) } } }
   runInNewContext(await readFile(new URL('../dsh/client.js', import.meta.url), 'utf8'), {
     window: { __ModuleLoader__: { load(spec) { module = spec.factory(name => name === 'react' ? react : require(name)) } } },
     fetch: options.fetch || (async path => ({ status: !options.available || options.available.includes(path) ? 200 : 404 })), console,
@@ -16,6 +16,52 @@ async function browserModule(react, options = {}) {
   module.apply(ctx); await new Promise(resolve => setImmediate(resolve))
   return registrations[0]
 }
+
+test('the conversation persona control is an additive official composer slot and is fully bilingual', async () => {
+  const registrations = [], realReact = require('react'), { renderToStaticMarkup } = require('react-dom/server')
+  const snapshot = { context: { scope: 'workspace', independent: true, workspace: 'Demo' }, config: { enabled: true, learning: false, mode: 'preset', preset: 'direct', title: 'Demo persona', instructions: 'Stay concise.' } }
+  let language = 'en'
+  const locale = { getSnapshot: () => ({ active: language }), subscribe: () => () => {} }
+  const react = { ...realReact, useState(value) { return realReact.useState(value === null ? snapshot : value) } }
+  await browserModule(react, { registrations, locale, available: ['/api/evo-subagent/persona'] })
+  const control = registrations.find(x => x.name === 'conversation.input.left')
+  assert.ok(control)
+  const english = renderToStaticMarkup(realReact.createElement(control.component, { sessionId: 'demo' }))
+  for (const text of ['This conversation only', 'Independent workspace', 'Efficient and direct', 'Style guidance']) assert.ok(english.includes(text), text)
+  assert.ok(!/[\u3400-\u9fff]/u.test(english))
+  language = 'zh-CN'
+  const chinese = renderToStaticMarkup(realReact.createElement(control.component, { sessionId: 'demo' }))
+  for (const text of ['仅此对话独立', '工作区独立', '高效利落', '风格要求']) assert.ok(chinese.includes(text), text)
+  assert.ok(!chinese.includes('This conversation only'))
+})
+
+test('composer choices address the current session and preserve scope/profile revisions', async () => {
+  const registrations = [], requests = [], refs = []
+  let refIndex = 0
+  const snapshot = { revision: 'profile-rev', sharingRevision: 'scope-rev', contextKey: 'global:global', context: { scope: 'global', independent: false, workspace: 'Demo', workspaceId: 'workspace-id' }, config: {} }
+  const react = {
+    createElement(type, props, ...children) { return { type, props: { ...props, children } } },
+    useState(value) { return [value === null ? snapshot : value, () => {}] },
+    useRef(value) { return refs[refIndex++] ??= { current: value } }, useEffect() {}, useSyncExternalStore: (_s, read) => read(),
+  }
+  await browserModule(react, { registrations, fetch: async (path, options) => {
+    if (!options?.method) return { status: path === '/api/evo-subagent/persona' ? 200 : 404 }
+    requests.push({ path, options }); return { status: 200, ok: true, json: async () => snapshot }
+  } })
+  const control = registrations.find(x => x.name === 'conversation.input.left').component
+  const node = control({ sessionId: 'chat-a' })
+  function find(node) {
+    if (!node) return undefined
+    if (Array.isArray(node)) return node.map(find).find(Boolean)
+    return node.type === 'select' ? node : find(node.props?.children)
+  }
+  await find(node).props.onChange({ target: { value: 'conversation' } })
+  assert.equal(requests[0].path, '/api/evo-subagent/persona?session=chat-a')
+  const body = JSON.parse(requests[0].options.body)
+  assert.equal(body.sessionId, 'chat-a'); assert.equal(body.scope, 'conversation')
+  assert.equal(body.sharingRevision, 'scope-rev'); assert.equal(body.revision, 'profile-rev')
+  assert.equal(body.workspaceId, 'workspace-id'); assert.equal(body.contextKey, 'global:global')
+})
 
 test('all three settings sections share appearance, expansion timing, keyboard hiding and reduced-motion behavior', async () => {
   const react = require('react'), { renderToStaticMarkup } = require('react-dom/server')

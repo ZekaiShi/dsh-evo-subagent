@@ -21,6 +21,7 @@ const { createUserMessage, createAssistantMessage } = await import(pathToFileURL
 const signal = () => new AbortController().signal
 const setMode = (policy, feature, mode) => policy.set(feature, mode, policy.snapshot(feature).revision)
 const configure = (store, extra) => store.manage({ action: 'configure', revision: store.read().revision, ...extra })
+const contextFields = state => ({ revision: state.revision, sharingRevision: state.sharingRevision, workspaceId: state.context.workspaceId, contextKey: state.contextKey })
 
 async function fixture(t) {
   const home = await mkdtemp(join(tmpdir(), 'evo-sharing-')), ctx = new Context(), directories = new Map(), routes = new Map(), calls = []
@@ -44,8 +45,9 @@ async function fixture(t) {
   const policy = new SharingStore(profileBase(home))
   function session(id, cwd = a, meta = {}) { return ctx.sessions.create(id, { ...(meta.isSeeded ? { seed: [], inheritedEventCount: 0 } : {}), meta: { cwd, ...meta } }) }
   const a1 = session('chat-a1'), a2 = session('chat-a2', join(a, 'nested')), b1 = session('chat-b1', b)
-  async function api(feature, method = 'GET', input, target = '') {
-    const url = 'http://local/api/evo-subagent/' + feature + (target ? '?target=' + encodeURIComponent(target) : '')
+  async function api(feature, method = 'GET', input, target = '', query = {}) {
+    const params = new URLSearchParams({ ...(target ? { target } : {}), ...query }).toString()
+    const url = 'http://local/api/evo-subagent/' + feature + (params ? '?' + params : '')
     const response = await routes.get('/api/evo-subagent/' + feature)(new Request(url, { method, ...(input ? { body: JSON.stringify(input) } : {}) }))
     return { status: response.status, body: await response.json() }
   }
@@ -215,4 +217,131 @@ test('new completed human turns reach the correct scoped observer through the re
   assert.equal(calls.length, 1)
   assert.equal(selected.read().stats.turns, 1)
   assert.equal(p.current({ session: a2 }).store.read().stats.turns, 0)
+})
+
+test('workspace overrides coexist with global defaults and custom guidance is applied without copying global data', async t => {
+  const { home, api, ctx, profiles, a1, a2, b1 } = await fixture(t), p = profiles('persona')
+  const global = new PersonaStore(personaPath(home))
+  await configure(global, { enabled: true, preset: 'playful', title: 'Shared companion' })
+  const original = global.read().revision
+  const target = p.describe(a1, 'workspace').id
+  let state = (await api('persona', 'GET', undefined, target, { scope: 'workspace' })).body
+  assert.equal(state.sharing.defaultMode, 'global')
+  const assigned = await api('persona', 'POST', { action: 'assign', kind: 'workspace', target, mode: 'workspace', sharingRevision: state.sharing.revision }, target, { scope: 'workspace' })
+  assert.equal(assigned.status, 200)
+  assert.equal(p.policy.read().version, 2)
+  state = assigned.body
+  assert.equal(state.config.enabled, true); assert.equal(state.config.learning, false)
+  const saved = await api('persona', 'POST', { action: 'configure', revision: state.revision, sharingRevision: state.sharing.revision, preset: 'direct', title: 'Efficient colleague', instructions: 'Be concise, retain independent judgment.' }, target, { scope: 'workspace' })
+  assert.equal(saved.status, 200)
+  assert.equal(ctx.persona.read({ session: a2 }).config.preset, 'direct')
+  assert.equal(ctx.persona.read({ session: b1 }).config.preset, 'playful')
+  assert.equal(global.read().revision, original)
+  const prompt = renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: { session: a1 } }))
+  assert.match(prompt, /independent judgment/)
+  assert.match(prompt, /Efficient colleague/)
+  const stale = await api('persona', 'POST', { action: 'assign', kind: 'workspace', target, mode: 'global', sharingRevision: 'old' }, target, { scope: 'workspace' })
+  assert.equal(stale.status, 409)
+})
+
+test('composer scope controls hot-switch between workspace and conversation personas without changing the global profile', async t => {
+  const { ctx, api, profiles, a1, a2, b1, calls } = await fixture(t), p = profiles('persona')
+  const read = async session => (await api('persona', 'GET', undefined, '', { session: session.id })).body
+  let state = await read(a1)
+  assert.equal(state.context.scope, 'global')
+  let changed = await api('persona', 'POST', { action: 'set-context', sessionId: a1.id, scope: 'workspace', ...contextFields(state) })
+  assert.equal(changed.status, 200)
+  state = changed.body
+  changed = await api('persona', 'POST', { action: 'configure-context', sessionId: a1.id, ...contextFields(state), preset: 'direct', instructions: 'Keep coding discussions efficient.' })
+  assert.equal(changed.status, 200)
+  assert.equal((await read(a2)).config.preset, 'direct')
+  state = await read(a2)
+  changed = await api('persona', 'POST', { action: 'set-context', sessionId: a2.id, scope: 'conversation', ...contextFields(state) })
+  assert.equal(changed.status, 200)
+  state = changed.body
+  assert.equal(state.config.learning, false)
+  changed = await api('persona', 'POST', { action: 'configure-context', sessionId: a2.id, ...contextFields(state), preset: 'calm', title: 'My own guide', learning: true })
+  assert.equal(changed.status, 200)
+  assert.equal((await read(a1)).config.preset, 'direct')
+  assert.equal((await read(b1)).context.scope, 'global')
+  const globalBefore = p.current({ session: b1 }).store.read().revision, workspaceBefore = p.current({ session: a1 }).store.read().revision
+  const selected = p.current({ session: a2 }).store, generation = selected.read().generation, agent = { id: 'isolated', session: a2 }
+  ctx.emit('agent/inbox/claimed', { agent, turn: 1, message: createUserMessage({ content: [{ type: 'text', text: 'Please use a warmer tone.' }], source: { kind: 'user' } }) })
+  a2.append('turn/start', { turn: 1 })
+  a2.append('assistant/message', { turn: 1, step: 1, message: createAssistantMessage({ content: [{ type: 'text', text: 'A helpful answer.' }], source: { provider: 'fake', model: 'fake' } }), stream: [] }, { surfaceOp: 'append' })
+  a2.append('turn/end', { turn: 1, reason: { kind: 'completed' } }); ctx.emit('agent/status', { agent, status: 'idle' })
+  const deadline = Date.now() + 2500
+  while (selected.read().generation < generation + 2) { assert.ok(Date.now() < deadline); await new Promise(resolve => setTimeout(resolve, 10)) }
+  assert.equal(calls.length, 1)
+  assert.equal(p.current({ session: a1 }).store.read().revision, workspaceBefore)
+  assert.equal(p.current({ session: b1 }).store.read().revision, globalBefore)
+  state = await read(a2)
+  changed = await api('persona', 'POST', { action: 'set-context', sessionId: a2.id, scope: 'inherit', ...contextFields(state) })
+  assert.equal(changed.body.context.scope, 'workspace')
+  assert.equal(changed.body.config.preset, 'direct')
+  assert.equal((await api('persona', 'GET', undefined, '', { session: 'missing' })).status, 404)
+})
+
+test('stale composer edits cannot cross workspace boundaries even when profile contents and revisions are identical', async t => {
+  const { api, profiles, directories, a1, b1, b } = await fixture(t), p = profiles('persona')
+  for (const session of [a1, b1]) {
+    const target = p.describe(session, 'workspace')
+    await p.policy.assign('persona', 'workspace', target.id, 'workspace', p.policy.snapshot('persona').revision)
+    await configure(p.current({ session }).store, { enabled: true, learning: false })
+  }
+  const storeA = p.current({ session: a1 }).store, storeB = p.current({ session: b1 }).store
+  assert.equal(storeA.read().revision, storeB.read().revision)
+  const stale = (await api('persona', 'GET', undefined, '', { session: a1.id })).body
+  directories.set(a1.id, b)
+  const revision = storeB.read().revision, policyRevision = p.policy.snapshot('persona').revision
+  assert.equal((await api('persona', 'POST', { action: 'configure-context', sessionId: a1.id, preset: 'direct', ...contextFields(stale) })).status, 409)
+  assert.equal((await api('persona', 'POST', { action: 'set-context', sessionId: a1.id, scope: 'conversation', ...contextFields(stale) })).status, 409)
+  assert.equal(storeB.read().revision, revision)
+  assert.equal(p.policy.snapshot('persona').revision, policyRevision)
+})
+
+test('Bilibili headless prompts labelled as user input cannot train or read the global persona or habit profile', async t => {
+  const { ctx, profiles, a1 } = await fixture(t), p = profiles('persona'), h = profiles('habits')
+  const global = p.current({ session: a1 }).store, habits = h.current({ session: a1 }).store
+  await configure(global, { enabled: true, title: 'Private global persona' })
+  await configure(habits, { enabled: true })
+  await habits.manage({ action: 'replace-summary', revision: habits.read().revision, summary: 'Keep global routine answers concise.' })
+  const personaRevision = global.read().revision, habitsRevision = habits.read().revision
+  const agent = { id: 'headless-bili', session: a1, ctx, options: {} }
+  ctx.emit('agent/inbox/claimed', { agent, turn: 1, message: createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Generated Bilibili task. <!-- evo-subagent:bili:v1:start --> Use this workspace persona. <!-- evo-subagent:bili:v1:end -->' }] }) })
+  const prompt = renderContextSnapshot(await ctx.systemPrompt.assemble({ agent }))
+  assert.ok(!prompt.includes('Private global persona'))
+  assert.ok(!prompt.includes('global routine answers concise'))
+  assert.equal(p.current(agent).store, null)
+  assert.equal(h.current(agent).store, null)
+  assert.equal(global.read().revision, personaRevision)
+  assert.equal(habits.read().revision, habitsRevision)
+  ctx.emit('agent/inbox/claimed', { agent, turn: 2, message: createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'A genuine owner request after the background task.' }] }) })
+  assert.match(renderContextSnapshot(await ctx.systemPrompt.assemble({ agent })), /Private global persona/)
+  ctx.emit('agent/status', { agent, status: 'idle' })
+})
+
+test('owner API links video knowledge only to an explicitly isolated workspace and hot-updates the upstream persona', async t => {
+  const { home, api, profiles, a1 } = await fixture(t), p = profiles('persona'), target = p.describe(a1, 'workspace').id
+  const source = join(home, 'bili-duty'); await mkdir(join(source, 'out'), { recursive: true })
+  await writeFile(join(source, 'config.json'), JSON.stringify({ workspace: '', personaPrompt: '', autoComment: false, dmMode: 'off' }))
+  await writeFile(join(source, 'out', '2026-10-24.md'), '### BV1xx411c7mD\nEvaluate calibration using a separate held-out sample.\n')
+  let state = (await api('persona', 'GET', undefined, target, { scope: 'workspace' })).body
+  assert.equal((await api('persona', 'POST', { action: 'bili-connect', revision: state.revision, sharingRevision: state.sharing.revision }, target, { scope: 'workspace' })).status, 400)
+  state = (await api('persona', 'POST', { action: 'assign', kind: 'workspace', target, mode: 'workspace', sharingRevision: state.sharing.revision }, target, { scope: 'workspace' })).body
+  let saved = await api('persona', 'POST', { action: 'bili-connect', revision: state.revision, sharingRevision: state.sharing.revision }, target, { scope: 'workspace' })
+  assert.equal(saved.status, 200); assert.equal(saved.body.bili.connected, true)
+  assert.equal(saved.body.readings.length, 1)
+  state = saved.body
+  saved = await api('persona', 'POST', { action: 'configure', revision: state.revision, sharingRevision: state.sharing.revision, title: 'Independent scientist' }, target, { scope: 'workspace' })
+  assert.equal(saved.status, 200)
+  let upstream = JSON.parse(await readFile(join(source, 'config.json'), 'utf8'))
+  assert.match(upstream.personaPrompt, /Independent scientist/)
+  assert.match(upstream.personaPrompt, /held-out sample/)
+  assert.equal(upstream.autoComment, false); assert.equal(upstream.dmMode, 'off')
+  state = saved.body
+  saved = await api('persona', 'POST', { action: 'bili-disconnect', revision: state.revision, sharingRevision: state.sharing.revision }, target, { scope: 'workspace' })
+  assert.equal(saved.status, 200)
+  upstream = JSON.parse(await readFile(join(source, 'config.json'), 'utf8'))
+  assert.equal(upstream.personaPrompt, '')
 })

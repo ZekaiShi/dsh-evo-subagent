@@ -2,7 +2,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { AXES, PRESETS, SCENARIOS, PERSONA_LIMITS, PersonaError, PersonaStore, personaPath, personaStyle, personaContext, safeText } from './persona-store.js'
 import { isGeneralPreference, preferenceParagraph } from './preferences.js'
-import { ScopeProfiles, SharingError, isChildSession } from './sharing.js'
+import { ScopeProfiles, SharingError, isChildSession, markExternalPrompt } from './sharing.js'
+import { BiliBridge } from './bili-bridge.js'
 
 export const name = 'evo-persona'
 export const inject = ['llm', 'systemPrompt']
@@ -178,6 +179,13 @@ async function body(request) {
 export function apply(ctx, config = {}) {
   const profiles = new ScopeProfiles(ctx, config.dshHome, 'persona', base => new PersonaStore(join(base, 'persona')))
   const globalStore = new PersonaStore(personaPath(config.dshHome)), observer = new PersonaObserver(globalStore, ctx.llm)
+  const bridge = new BiliBridge(profiles)
+  ctx.effect(() => {
+    const controller = new AbortController()
+    const timer = setInterval(() => { void bridge.sync(controller.signal).catch(() => {}) }, 30000)
+    timer.unref?.()
+    return () => { clearInterval(timer); controller.abort() }
+  }, 'evo-persona: optional Bilibili content bridge')
   let legacyBudget
   try { legacyBudget = globalStore.read().budget } catch { /* Invalid global data does not get copied into isolated profiles. */ }
   const turns = new WeakMap()
@@ -185,6 +193,7 @@ export function apply(ctx, config = {}) {
   ctx.effect(() => () => observer.dispose(), 'evo-persona: observer queue')
   ctx.on('agent/status', ({ agent, status }) => observer.busy(agent.id, status === 'running'))
   ctx.on('agent/inbox/claimed', ({ agent, message, turn }) => {
+    if (markExternalPrompt(agent?.session, message)) { turns.delete(agent.session); return }
     if (!parent(agent.session) || !human(message)) return
     // A new real user message invalidates old (including image-only) evidence.
     observer.busy(agent.id, true)
@@ -234,15 +243,62 @@ export function apply(ctx, config = {}) {
   ctx.inject(['connection'], ({ connection }) => connection.fetch.register({ path: '/api/evo-subagent/persona', methods: ['GET', 'POST'], requestBody: 'buffered', async fetch(request) {
     try {
       const input = request.method === 'POST' ? await body(request) : null
+      const sessionId = input?.sessionId ?? new URL(request.url).searchParams.get('session')
+      if (sessionId) {
+        let context = profiles.sessionContext(sessionId)
+        if (input) {
+          if (input.workspaceId !== context.workspace.id) throw new PersonaError('The conversation workspace changed; reopen persona settings', 409)
+          observer.cancel()
+          if (input.action === 'set-context') {
+            context = await profiles.setSessionScope(sessionId, input.scope, input.sharingRevision, request.signal)
+            const state = context.selected.store.read()
+            if (context.selected.mode !== 'global' && state.generation === 0) await context.selected.store.manage({ action: 'configure', revision: state.revision, enabled: true, learning: false }, request.signal)
+          } else if (input.action === 'configure-context') {
+            if (context.selected.mode === 'global') throw new PersonaError('Configure shared defaults in settings, or choose an independent persona first', 409)
+            const selected = context.selected
+            if (input.contextKey !== `${selected.mode}:${selected.id}`) throw new PersonaError('The active persona changed; reopen persona settings', 409)
+            profiles.assertWrite(input, selected)
+            await selected.store.manage({ action: 'configure', revision: input.revision,
+              ...Object.fromEntries(['preset', 'title', 'instructions', 'mode', 'learning', 'enabled'].filter(key => Object.hasOwn(input, key)).map(key => [key, input[key]])) }, request.signal)
+          } else throw new PersonaError('Unsupported conversation persona action')
+          await bridge.sync(request.signal).catch(() => {})
+        }
+        const state = context.selected.store.read(), policy = profiles.policy.snapshot('persona')
+        return Response.json({ config: state.config, revision: state.revision, sharingRevision: policy.revision, contextKey: `${context.selected.mode}:${context.selected.id}`,
+          context: { sessionId, workspace: context.workspace.label, workspaceId: context.workspace.id, scope: context.selected.mode,
+            override: policy.assignments.conversation[context.conversation.id] ?? 'inherit', independent: context.selected.mode !== 'global' } }, { headers: { 'cache-control': 'no-store' } })
+      }
       if (input?.action === 'set-scope') await profiles.policy.set('persona', input.scope, input.sharingRevision, request.signal)
+      if (input?.action === 'assign') {
+        const target = profiles.catalog(input.kind).find(item => item.id === input.target)
+        if (!target) throw new PersonaError('Selected workspace or conversation is unavailable', 404)
+        await profiles.policy.assign('persona', input.kind, target.id, input.mode, input.sharingRevision, request.signal)
+        if (input.kind === 'workspace' && input.mode === 'workspace') {
+          const selected = profiles.selection({ ...profiles.policy.snapshot('persona'), mode: 'workspace' }, target), state = selected.store.read()
+          if (state.generation === 0) await selected.store.manage({ action: 'configure', revision: state.revision, enabled: true, learning: false }, request.signal)
+        }
+      }
       if (request.method === 'POST') observer.cancel()
       const selected = profiles.forRequest(request, input?.action === 'set-scope')
       if (!selected.store) {
         if (input && input.action !== 'set-scope') throw new PersonaError('Select a workspace or conversation first', 409)
         return Response.json({ scopeOnly: true, sharing: selected.sharing }, { headers: { 'cache-control': 'no-store' } })
       }
-      const state = input && input.action !== 'set-scope' ? await selected.store.manage(profiles.assertWrite(input, selected), request.signal) : selected.store.read()
-      return Response.json({ ...state, sharing: selected.sharing, generalPending: state.pending.filter(isGeneralPreference),
+      if (input?.action?.startsWith('bili-')) {
+        profiles.assertWrite(input, selected)
+        if (selected.mode !== 'workspace') throw new PersonaError('Select an independent workspace profile before linking Bilibili')
+        if (input.action === 'bili-connect') await bridge.connect(selected.id, request.signal)
+        else if (input.action === 'bili-disconnect') {
+          if (bridge.read()?.target !== selected.id) throw new PersonaError('This workspace is not linked to Bilibili', 409)
+          await bridge.disconnect(request.signal)
+        } else if (input.action === 'bili-sync') {
+          if (bridge.read()?.target !== selected.id) throw new PersonaError('This workspace is not linked to Bilibili', 409)
+          await bridge.sync(request.signal)
+        } else throw new PersonaError('Unsupported Bilibili bridge action')
+      } else if (input && !['set-scope', 'assign'].includes(input.action)) await selected.store.manage(profiles.assertWrite(input, selected), request.signal)
+      if (input) await bridge.sync(request.signal).catch(() => {})
+      const state = selected.store.read()
+      return Response.json({ ...state, sharing: selected.sharing, bili: bridge.status(selected.id), generalPending: state.pending.filter(isGeneralPreference),
         summaries: Object.fromEntries(['user', 'relationship'].map(key => [key, preferenceParagraph(state.snapshot[key].entries)])),
         runtime: { queued: observer.queue.length, running: !!observer.running, dropped: observer.dropped, error: observer.errorScope === selected.id ? observer.lastError : '' } }, { headers: { 'cache-control': 'no-store' } })
     } catch (error) { return Response.json({ error: error instanceof PersonaError || error instanceof SharingError ? error.message : 'Persona storage unavailable; files preserved' }, { status: error.status ?? 400, headers: { 'cache-control': 'no-store' } }) }

@@ -1,7 +1,7 @@
 {
   "name": "evo-subagent",
-  "version": "1.0.0",
-  "description": "Role-based subagent routing, workspace evolution, companion personas and scoped user preferences for DeepSeek Harness",
+  "version": "1.1.0",
+  "description": "Adaptive styles and independent workspace personas for DeepSeek Harness, with conversation profiles, role routing and optional Bilibili content learning",
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -22,6 +22,7 @@
     "persona-store.js",
     "preferences.js",
     "sharing.js",
+    "bili-bridge.js",
     "evolution.js",
     "scope.js",
     "skills.js",
@@ -36,7 +37,7 @@
   ],
   "scripts": {
     "test": "node --test --test-isolation=none",
-    "check": "node --check index.js && node --check plugin.js && node --check binding.js && node --check evolution.js && node --check scope.js && node --check skills.js && node --check habits.js && node --check habits-store.js && node --check persona.js && node --check persona-store.js && node --check preferences.js && node --check sharing.js && node --check dsh/client.js",
+    "check": "node --check index.js && node --check plugin.js && node --check binding.js && node --check evolution.js && node --check scope.js && node --check skills.js && node --check habits.js && node --check habits-store.js && node --check persona.js && node --check persona-store.js && node --check preferences.js && node --check sharing.js && node --check bili-bridge.js && node --check dsh/client.js",
     "prepack": "npm run check && npm test"
   },
   "keywords": [
