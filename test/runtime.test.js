@@ -178,5 +178,41 @@ test('the browser bundle registers a renderable tab on the new DSH Plugins page'
   assert.equal(registrations[0].options.name, 'settings.plugins.tab')
   assert.equal(registrations[0].options.label, 'evo-subagent')
   const html = renderToStaticMarkup(react.createElement(registrations[0].component))
-  assert.match(html, /evo-subagent/)
+  assert.match(html, /Subagent management/)
 })
+
+for (const catalogAvailable of [true, false]) {
+  test(`routing dropdowns and options use paired theme colors (catalog ${catalogAvailable ? 'available' : 'unavailable'})`, async () => {
+    const realReact = require('react')
+    const { renderToStaticMarkup } = require('react-dom/server')
+    const summary = {
+      projects: [{ projectRoot: '/demo', projectName: 'Demo',
+        agents: [{ agentKey: 'reviewer', editable: true, source: 'binding', provider: 'test-provider', model: 'test-model' }],
+        mainAgent: { filename: '', candidates: catalogAvailable ? ['AGENTS.md'] : [] },
+      }],
+      builtin: [{ agentKey: 'planner', source: 'template' }],
+      modelsByProvider: catalogAvailable ? { 'test-provider': ['test-model', 'other-model'], 'other-provider': [] } : {},
+      scope: { scanSource: 'workspaces', workspaces: [{ path: '/demo', title: 'Demo' }] },
+    }
+    const react = { ...realReact, useState(value) { return realReact.useState(value === false ? true : value === null ? summary : value) } }
+    const registrations = []
+    let module
+    const ctx = {
+      inject(names, callback) { if (names[0] === 'slots') callback(ctx) },
+      slots: { inject(_name, callback) { return callback() }, register(_options, component) { registrations.push(component) } },
+    }
+    runInNewContext(await readFile(new URL('../dsh/client.js', import.meta.url), 'utf8'), {
+      window: { __ModuleLoader__: { load(spec) { module = spec.factory(name => name === 'react' ? react : require(name)) } } },
+      fetch: async path => ({ status: path === '/evo-subagent/projects' ? 200 : 404 }), console,
+    })
+    module.apply(ctx); await new Promise(resolve => setImmediate(resolve))
+    const html = renderToStaticMarkup(realReact.createElement(registrations[0]))
+    assert.equal((html.match(/<select\b/g) || []).length, 4) // Provider, model, main agent and workspace.
+    const controls = html.match(/<(?:select|option)\b[^>]*>/g)
+    assert.equal(controls.length, catalogAvailable ? 11 : 8)
+    for (const control of controls) {
+      assert.match(control, /background-color:var\(--dsw-alias-bg-layer-3, #fff\)/)
+      assert.match(control, /color:var\(--dsw-alias-label-primary, #222\)/)
+    }
+  })
+}

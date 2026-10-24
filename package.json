@@ -1,12 +1,14 @@
 {
   "name": "evo-subagent",
-  "version": "0.8.0",
-  "description": "Unified DeepSeek Harness plugin: role-based subagent routing + per-agent evolution — prefercmd/memory as knowledge allow/deny lists, so repeated tasks start from proven commands and save tokens",
+  "version": "1.0.0",
+  "description": "Role-based subagent routing, workspace evolution, companion personas and scoped user preferences for DeepSeek Harness",
   "type": "module",
   "main": "index.js",
   "exports": {
     ".": "./index.js",
     "./binding": "./binding.js",
+    "./habits": "./habits.js",
+    "./persona": "./persona.js",
     "./client": "./dsh/client.js",
     "./package.json": "./package.json"
   },
@@ -14,6 +16,12 @@
     "index.js",
     "plugin.js",
     "binding.js",
+    "habits.js",
+    "habits-store.js",
+    "persona.js",
+    "persona-store.js",
+    "preferences.js",
+    "sharing.js",
     "evolution.js",
     "scope.js",
     "skills.js",
@@ -23,11 +31,12 @@
     "dsh",
     "README.md",
     "README.zh-CN.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
     "test": "node --test --test-isolation=none",
-    "check": "node --check index.js && node --check plugin.js && node --check binding.js && node --check evolution.js && node --check scope.js && node --check skills.js && node --check dsh/client.js",
+    "check": "node --check index.js && node --check plugin.js && node --check binding.js && node --check evolution.js && node --check scope.js && node --check skills.js && node --check habits.js && node --check habits-store.js && node --check persona.js && node --check persona-store.js && node --check preferences.js && node --check sharing.js && node --check dsh/client.js",
     "prepack": "npm run check && npm test"
   },
   "keywords": [
@@ -35,7 +44,9 @@
     "dsh",
     "dsh-plugin",
     "subagent",
-    "model-routing"
+    "model-routing",
+    "persona",
+    "user-preferences"
   ],
   "license": "MIT",
   "repository": {

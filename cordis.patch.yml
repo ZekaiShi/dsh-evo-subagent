@@ -1,4 +1,8 @@
 - insert:
+    - id: evo-persona
+      name: evo-subagent/persona
+    - id: evo-user-habits
+      name: evo-subagent/habits
     - id: evo-subagent
       name: evo-subagent
       config:
