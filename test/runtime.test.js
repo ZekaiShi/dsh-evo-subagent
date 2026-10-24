@@ -177,7 +177,7 @@ test('the browser bundle registers a renderable tab on the new DSH Plugins page'
   assert.equal(registrations.length, 2)
   assert.equal(registrations[0].options.name, 'settings.plugins.tab')
   assert.equal(registrations[1].options.name, 'conversation.input.left')
-  assert.equal(registrations[0].options.label, 'evo-subagent')
+  assert.equal(registrations[0].options.label, 'dsh-evo-subagent')
   const html = renderToStaticMarkup(react.createElement(registrations[0].component))
   assert.match(html, /Subagent management/)
 })

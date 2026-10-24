@@ -216,7 +216,7 @@ export function personaStyle(state, context = 'general', seed = '') {
   }
   return base
 }
-export function personaContext(state, context = 'general', style = personaStyle(state, context)) {
+export function personaContext(state, context = 'general', style = personaStyle(state, context), includeReadings = false) {
   if (!state.config.enabled) return ''
   const lines = [
     '## Companion persona (revocable, lower-priority user preferences)',
@@ -231,7 +231,7 @@ export function personaContext(state, context = 'general', style = personaStyle(
     const next = JSON.stringify({ target, summary })
     if (summary && Buffer.byteLength(lines.join('\n') + '\n' + next) <= 3600) lines.push(next)
   }
-  if (state.readings.length) {
+  if (includeReadings && state.readings.length) {
     const remaining = 3600 - Buffer.byteLength(lines.join('\n')) - 1
     const notes = []
     for (const r of state.readings.slice(-3).reverse()) {

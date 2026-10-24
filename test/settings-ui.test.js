@@ -27,11 +27,12 @@ test('the conversation persona control is an additive official composer slot and
   const control = registrations.find(x => x.name === 'conversation.input.left')
   assert.ok(control)
   const english = renderToStaticMarkup(realReact.createElement(control.component, { sessionId: 'demo' }))
-  for (const text of ['This conversation only', 'Independent workspace', 'Efficient and direct', 'Style guidance']) assert.ok(english.includes(text), text)
+  for (const text of ['This conversation only', 'Follow workspace settings', 'Efficient and direct', 'Style guidance']) assert.ok(english.includes(text), text)
+  assert.ok(!english.includes('Independent workspace'))
   assert.ok(!/[\u3400-\u9fff]/u.test(english))
   language = 'zh-CN'
   const chinese = renderToStaticMarkup(realReact.createElement(control.component, { sessionId: 'demo' }))
-  for (const text of ['仅此对话独立', '工作区独立', '高效利落', '风格要求']) assert.ok(chinese.includes(text), text)
+  for (const text of ['仅此对话独立', '跟随工作区', '高效利落', '风格要求']) assert.ok(chinese.includes(text), text)
   assert.ok(!chinese.includes('This conversation only'))
 })
 
@@ -150,7 +151,59 @@ test('English and Chinese workspace dictionaries have complete matching translat
   for (const values of [english, chinese]) for (const value of Object.values(values)) if (typeof value === 'string') assert.ok(value.trim())
 })
 
-for (const feature of ['persona', 'habits']) {
+test('persona workspace mode lists collapsible workspaces without redundant selectors in both languages', async () => {
+  const realReact = require('react'), { renderToStaticMarkup } = require('react-dom/server')
+  let state = { scopeOnly: true, sharing: { mode: 'workspace', defaultMode: 'workspace', workspaceOptions: [{ id: 'a', label: 'Project A' }, { id: 'b', label: 'Project B' }] } }
+  let language = 'zh-CN'
+  const locale = { getSnapshot: () => ({ active: language }), subscribe: () => () => {} }
+  const react = { ...realReact, useState(value) { return realReact.useState(value === false ? true : value === null ? state : value) } }
+  const Card = await browserModule(react, { locale, available: ['/api/evo-subagent/persona'] })
+  const chinese = renderToStaticMarkup(realReact.createElement(Card))
+  for (const text of ['每个工作区独立', 'Project A', 'Project B', 'persona-workspace-a', 'persona-workspace-b']) assert.ok(chinese.includes(text), text)
+  assert.equal((chinese.match(/type="checkbox"/g) || []).length, 1)
+  assert.match(chinese, /type="checkbox"[^>]*checked=""/)
+  for (const text of ['配置工作区', '为这个工作区单独维护人格', '适用范围（默认）', '<select']) assert.ok(!chinese.includes(text), text)
+  language = 'en'
+  const english = renderToStaticMarkup(realReact.createElement(Card))
+  assert.ok(english.includes('Separate persona for each workspace'))
+  assert.ok(!/[\u3400-\u9fff]/u.test(english))
+  state = { sharing: { mode: 'global', defaultMode: 'global', workspaceOptions: state.sharing.workspaceOptions }, config: { enabled: true, learning: false, mode: 'preset', preset: 'calm' }, stats: {} }
+  const shared = renderToStaticMarkup(realReact.createElement(Card))
+  assert.ok(shared.includes('All workspaces use the shared persona'))
+  assert.ok(shared.includes('Persona preset'))
+  assert.ok(!shared.includes('persona-workspace-a'))
+})
+
+test('persona checkbox changes routing and workspace editors address their own target', async () => {
+  const requests = []
+  const state = { scopeOnly: true, sharing: { mode: 'workspace', defaultMode: 'workspace', revision: 'scope-revision', workspaceOptions: [{ id: 'workspace-a', label: 'Project A' }] } }
+  const react = {
+    createElement(type, props, ...children) { return { type, props: { ...props, children } } },
+    useState(value) { return [value === false ? true : value === null ? state : value, () => {}] },
+    useRef: () => ({ current: null }), useEffect() {}, useSyncExternalStore: (_s, read) => read(),
+  }
+  const Card = await browserModule(react, { fetch: async (path, options) => {
+    if (!options?.method) return { status: path === '/api/evo-subagent/persona' ? 200 : 404 }
+    requests.push({ path, options }); return { ok: true, status: 200, json: async () => state }
+  } })
+  function find(node, predicate) {
+    if (!node) return undefined
+    if (Array.isArray(node)) return node.map(n => find(n, predicate)).find(Boolean)
+    return predicate(node) ? node : find(node.props?.children, predicate)
+  }
+  const persona = Card().props.children.find(c => typeof c?.type === 'function').type
+  const panel = persona()
+  await find(panel, n => n.type === 'input' && n.props.type === 'checkbox').props.onChange({ target: { checked: false } })
+  assert.equal(requests[0].path, '/api/evo-subagent/persona')
+  assert.deepEqual(JSON.parse(requests[0].options.body), { sharingRevision: 'scope-revision', action: 'set-workspaces', enabled: false })
+  const editor = persona({ workspace: { id: 'workspace-a', label: 'Project A' } })
+  assert.ok(!find(editor, n => n.type === 'textarea'))
+  await find(editor, n => n.type === 'button').props.onClick()
+  assert.equal(requests[1].path, '/api/evo-subagent/persona?target=workspace-a&scope=workspace')
+  assert.equal(JSON.parse(requests[1].options.body).target, 'workspace-a')
+})
+
+for (const feature of ['habits']) {
   test(`${feature} scoped settings show bilingual selectors without accessing an unselected profile`, async () => {
     const realReact = require('react'), { renderToStaticMarkup } = require('react-dom/server')
     const state = { scopeOnly: true, sharing: { mode: 'conversation', selectedId: '', revision: 'scope-revision', options: [{ id: 'chat1', label: 'Demo · chat1' }] } }

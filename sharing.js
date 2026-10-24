@@ -84,6 +84,17 @@ export class SharingStore {
       state.modes[feature] = mode; state.controls[feature]++
     }, signal)
   }
+  async setWorkspaces(feature, enabled, revision, signal) {
+    if (!FEATURES.includes(feature) || typeof enabled !== 'boolean') throw new SharingError('Invalid workspace sharing option')
+    await this.update(state => {
+      if (stampFor(state, feature) !== revision) throw new SharingError('Sharing scope changed; reload before saving', 409)
+      state.modes[feature] = enabled ? 'workspace' : 'global'
+      // One workspace switch replaces the older per-workspace exceptions.
+      // Keep independent conversations and every saved profile intact.
+      if (state.assignments) state.assignments[feature].workspace = {}
+      state.controls[feature]++
+    }, signal)
+  }
   async assign(feature, kind, id, mode, revision, signal) {
     if (!FEATURES.includes(feature) || !['workspace', 'conversation'].includes(kind) || !/^[a-f0-9]{64}$/.test(id)
       || ![...SHARING_MODES, 'inherit'].includes(mode)) throw new SharingError('Invalid persona assignment')

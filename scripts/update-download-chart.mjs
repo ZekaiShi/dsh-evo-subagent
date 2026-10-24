@@ -1,35 +1,27 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
-const packageName = 'evo-subagent';
+const packageName = 'dsh-evo-subagent';
+const packageNames = ['evo-subagent', packageName];
 const outputPath = resolve('assets/npm-downloads.svg');
-const registryEndpoint = `https://registry.npmjs.org/${packageName}`;
-
-const registryResponse = await fetch(registryEndpoint, {
-  headers: { Accept: 'application/json', 'User-Agent': `${packageName}-download-chart` },
-});
-
-if (!registryResponse.ok) {
-  throw new Error(`npm registry returned ${registryResponse.status} ${registryResponse.statusText}`);
-}
-
-const registry = await registryResponse.json();
-const publishedOn = String(registry.time?.created ?? '').slice(0, 10);
-if (!/^\d{4}-\d{2}-\d{2}$/.test(publishedOn)) {
-  throw new Error('npm registry did not provide a valid package creation date');
-}
-
 const today = new Date().toISOString().slice(0, 10);
-const endpoint = `https://api.npmjs.org/downloads/range/${publishedOn}:${today}/${packageName}`;
-const response = await fetch(endpoint, {
-  headers: { Accept: 'application/json', 'User-Agent': `${packageName}-download-chart` },
-});
-if (!response.ok) {
-  throw new Error(`npm downloads API returned ${response.status} ${response.statusText}`);
+const totals = new Map();
+const headers = { Accept: 'application/json', 'User-Agent': `${packageName}-download-chart` };
+for (const name of packageNames) {
+  const registryResponse = await fetch(`https://registry.npmjs.org/${name}`, { headers });
+  if (name === packageName && registryResponse.status === 404) continue;
+  if (!registryResponse.ok) throw new Error(`npm registry returned ${registryResponse.status} for ${name}`);
+  const registry = await registryResponse.json();
+  const publishedOn = String(registry.time?.created ?? '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(publishedOn)) throw new Error(`Invalid npm creation date for ${name}`);
+  const response = await fetch(`https://api.npmjs.org/downloads/range/${publishedOn}:${today}/${name}`, { headers });
+  // New packages may be visible before their first daily download report.
+  if (name === packageName && response.status === 404) continue;
+  if (!response.ok) throw new Error(`npm downloads API returned ${response.status} for ${name}`);
+  const payload = await response.json();
+  for (const row of payload.downloads ?? []) totals.set(row.day, (totals.get(row.day) ?? 0) + (Number(row.downloads) || 0));
 }
-
-const payload = await response.json();
-const rows = Array.isArray(payload.downloads) ? payload.downloads : [];
+const rows = [...totals].sort(([a], [b]) => a.localeCompare(b)).map(([day, downloads]) => ({ day, downloads }));
 if (!rows.length) {
   throw new Error('npm downloads API returned no daily data');
 }
@@ -61,8 +53,8 @@ const grid = [0, 0.5, 1].map((ratio) => {
 
 const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title desc">
-  <title id="title">evo-subagent cumulative npm downloads</title>
-  <desc id="desc">Cumulative npm downloads for evo-subagent since its first release, generated automatically from the npm downloads API.</desc>
+  <title id="title">dsh-evo-subagent cumulative npm downloads</title>
+  <desc id="desc">Combined cumulative npm downloads for evo-subagent and dsh-evo-subagent, generated automatically from the npm downloads API.</desc>
   <defs>
     <linearGradient id="background" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#0b1020"/><stop offset="1" stop-color="#172554"/></linearGradient>
     <linearGradient id="line" x1="0" x2="1"><stop stop-color="#8b5cf6"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
@@ -70,7 +62,7 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
   </defs>
   <rect width="${width}" height="${height}" rx="18" fill="url(#background)"/>
   <text x="${pad.left}" y="36" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="22" font-weight="700">cumulative npm downloads</text>
-  <text x="${pad.left}" y="56" fill="#a5b4fc" font-family="system-ui, sans-serif" font-size="13">evo-subagent · since ${rows[0].day} · ${total.toLocaleString('en-US')} total</text>
+  <text x="${pad.left}" y="56" fill="#a5b4fc" font-family="system-ui, sans-serif" font-size="13">dsh-evo-subagent · includes evo-subagent · ${total.toLocaleString('en-US')} total</text>
   <g stroke="#64748b" stroke-opacity=".35" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="12">${grid}</g>
   <polygon points="${area}" fill="url(#area)"/>
   <polyline points="${points}" fill="none" stroke="url(#line)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>

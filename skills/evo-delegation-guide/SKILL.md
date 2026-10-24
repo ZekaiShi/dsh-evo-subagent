@@ -1,6 +1,6 @@
 ---
 name: evo-delegation-guide
-description: Choose an existing evo-subagent role and prepare a focused delegation task. Use when deciding which agent_key to call or when a child task needs clearer scope and acceptance criteria.
+description: Choose an existing dsh-evo-subagent role and prepare a focused delegation task. Use when deciding which agent_key to call or when a child task needs clearer scope and acceptance criteria.
 ---
 
 # Evo delegation guide

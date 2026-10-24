@@ -1,5 +1,25 @@
 # Changelog / 更新日志
 
+## 1.2.0 — 2026-10-24
+
+### English
+
+- Renamed the package and repository to **dsh-evo-subagent**, retaining existing local profiles, tool names and role bindings.
+- Replaced overlapping persona scope controls with one workspace-independence checkbox and collapsible workspace settings.
+- Simplified the conversation menu to follow the workspace or maintain its own persona.
+- Aligned preference updates with the shared foldout layout and animations.
+- Deferred the Bilibili integration pending upstream feedback; removed its settings and automatic synchronization. Existing content notes remain stored but are not included in normal persona prompts.
+- Combined download history across the old and new npm package names.
+
+### 中文
+
+- 包名与仓库更名为 **dsh-evo-subagent**，继续复用本地档案、工具名称和角色绑定。
+- 人格设置改为一个“每个工作区独立”勾选项，按工作区折叠管理。
+- 对话菜单简化为跟随工作区或仅此对话独立。
+- 通用偏好更新采用一致的折叠布局与动画。
+- B 站联动等待上游反馈，本版暂缓设置入口与自动同步；已有内容笔记保留，但不进入正常人格提示词。
+- 下载趋势合并统计新旧 npm 包名。
+
 ## 1.1.0 — 2026-10-24
 
 ### English

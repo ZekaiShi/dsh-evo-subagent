@@ -1,7 +1,7 @@
 {
-  "name": "evo-subagent",
-  "version": "1.1.0",
-  "description": "Adaptive styles and independent workspace personas for DeepSeek Harness, with conversation profiles, role routing and optional Bilibili content learning",
+  "name": "dsh-evo-subagent",
+  "version": "1.2.0",
+  "description": "Independent workspace personas, adaptive conversation styles and approved user preferences for DeepSeek Harness, with registered-model subagent routing",
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -52,11 +52,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ZekaiShi/evo-subagent.git"
+    "url": "git+https://github.com/ZekaiShi/dsh-evo-subagent.git"
   },
-  "homepage": "https://github.com/ZekaiShi/evo-subagent#readme",
+  "homepage": "https://github.com/ZekaiShi/dsh-evo-subagent#readme",
   "bugs": {
-    "url": "https://github.com/ZekaiShi/evo-subagent/issues"
+    "url": "https://github.com/ZekaiShi/dsh-evo-subagent/issues"
   },
   "publishConfig": {
     "access": "public"

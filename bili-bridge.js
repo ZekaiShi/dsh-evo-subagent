@@ -146,7 +146,7 @@ export class BiliBridge {
       current.readings = [...map.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-16)
     }, signal)
     const current = selected.store.read()
-    const prompt = base + (base ? '\n\n' : '') + START + '\n' + personaContext(current).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') + '\n' + END
+    const prompt = base + (base ? '\n\n' : '') + START + '\n' + personaContext(current, 'general', undefined, true).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') + '\n' + END
     if (prompt.length > 5900) throw new PersonaError('Linked persona exceeds the upstream prompt limit')
     cfg.personaPrompt = prompt; cfg.workspace = workspace.path
     cfg._set = [...new Set([...(Array.isArray(cfg._set) ? cfg._set : []), 'personaPrompt', 'workspace'])]

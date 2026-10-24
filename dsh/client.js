@@ -1,4 +1,4 @@
-// Browser half of the evo-subagent dsh plugin: the Evolution settings card.
+// Browser half of the dsh-evo-subagent plugin: the Evolution settings card.
 //
 // Renders a plugin card in Settings -> Plugins (the settings.plugins.tab
 // slot). The card groups every detected subagent by project workspace, shows
@@ -11,7 +11,7 @@
 // exports), so no build step and no dsh client imports — the same
 // zero-dependency stance as the modlens card it was modelled on.
 window.__ModuleLoader__.load({
-  id: 'evo-subagent',
+  id: 'dsh-evo-subagent',
   factory: (require) => {
     var module = { exports: {} }
     var exports = module.exports
@@ -166,7 +166,7 @@ window.__ModuleLoader__.load({
           h('button', { type: 'button', className: 'evo-settings-heading', 'aria-expanded': open, 'aria-controls': 'evo-panel-' + id, onClick: onToggle },
             h('div', { style: { flex: 1, minWidth: 0 } },
               h('div', { style: { fontSize: '14px', fontWeight: 600 } }, title),
-              h('div', { style: { color: 'var(--dsw-alias-label-tertiary, #888)', fontSize: '13px', lineHeight: 1.5, marginTop: '4px' } }, hint)), sectionChevron(h, open)),
+              hint ? h('div', { style: { color: 'var(--dsw-alias-label-tertiary, #888)', fontSize: '13px', lineHeight: 1.5, marginTop: '4px' } }, hint) : null), sectionChevron(h, open)),
           h('div', { id: 'evo-panel-' + id, className: 'evo-settings-reveal', 'data-open': String(open), 'aria-hidden': !open, inert: open ? undefined : '' },
             h('div', { className: 'evo-settings-clip' }, h('div', { className: 'evo-settings-content' }, retained.current))))
       }
@@ -205,7 +205,7 @@ window.__ModuleLoader__.load({
 
     function PersonaFactory(react, localeRef, Section, ScopeControl) {
       var h = react.createElement
-      return function PersonaCard() {
+      return function PersonaCard({ workspace } = {}) {
         var zh = useInterfaceLanguage(react, localeRef) === 'zh'
         var t = zh ? {
           title: '陪伴人格', hint: '选择喜欢的相处方式，让助手慢慢了解你',
@@ -217,8 +217,7 @@ window.__ModuleLoader__.load({
           user: '通用偏好', relationship: '通用相处约定', add: '补充偏好', text: '例如：偏好中文交流，先给结论，语气温和简洁', confirmForget: '忘记这段已确认的通用偏好？',
           rollback: '恢复上次风格', clear: '清除未确认的了解', confirmClear: '清除尚未确认的了解和近期调整记录？已经确认的记忆会保留。', empty: '新的了解会先在这里请你确认。',
           error: '操作失败', loading: '加载中…', general: '通用', coding: '编程', research: '科研', writing: '写作',
-          workspaces: '工作区人格', independent: '为这个工作区单独维护人格', isolated: '这里的风格调整只保存在本工作区，不参与全局人格学习。', profileName: '人格名称', guidance: '风格要求', guidanceHint: '例如：高效直接，先给方案；保留独立判断，不迎合。',
-          biliTitle: '附加：B 站内容学习', biliHint: '关联 dsh-bili-scroll 的人设与工作区，原有人设文字保留。它的日报与视频笔记会保存在此工作区，供后续任务参考；断开时恢复原有配置。', biliMissing: '请先安装并配置 dsh-bili-scroll。', connect: '关联到此工作区', disconnect: '断开关联', sync: '同步已读内容', learned: '已保留的视频笔记', clearReadings: '清除内容记忆',
+          workspaces: '每个工作区独立', shared: '所有工作区使用下方的共享人格；对话单独设置的人格优先生效。', isolated: '每个工作区分别设置风格、独立学习；对话单独设置的人格优先生效。', noWorkspace: '请先在 DSH 中打开工作区，再刷新。', legacyConversation: '当前默认按对话独立，可在输入框的人格菜单中调整。勾选后改为按工作区独立。', useShared: '改用共享人格', inactiveWorkspace: '此工作区此前设为共享人格。', useWorkspace: '使用工作区独立人格', profileName: '人格名称', guidance: '风格要求', guidanceHint: '例如：高效直接，先给方案；保留独立判断，不迎合。',
         } : {
           title: 'Companion persona', hint: 'Choose how you connect, and let your assistant get to know you',
           privacy: 'When enabled, short conversation excerpts are processed by a model in the background, with extra usage. You approve lasting memories and can pause learning at any time.',
@@ -229,11 +228,11 @@ window.__ModuleLoader__.load({
           user: 'General preferences', relationship: 'General interaction preferences', add: 'Add preference', text: 'For example: concise conclusions, a warm tone, and evidence when needed', confirmForget: 'Forget this confirmed general preference summary?',
           rollback: 'Restore previous style', clear: 'Clear unconfirmed memories', confirmClear: 'Clear unconfirmed memories and recent adjustments? Confirmed memories will remain.', empty: 'New memories will appear here for your approval.',
           error: 'Operation failed', loading: 'Loading…', general: 'General', coding: 'Coding', research: 'Research', writing: 'Writing',
-          workspaces: 'Workspace personas', independent: 'Maintain a separate persona for this workspace', isolated: 'Style changes stay in this workspace and do not update the global persona.', profileName: 'Persona name', guidance: 'Style guidance', guidanceHint: 'For example: concise and efficient, lead with a plan, and retain independent judgment.',
-          biliTitle: 'Optional: Bilibili content learning', biliHint: 'Link the dsh-bili-scroll persona and workspace while retaining its existing persona text. Reports and video notes stay in this workspace for later runs; disconnecting restores the previous configuration.', biliMissing: 'Install and configure dsh-bili-scroll first.', connect: 'Link this workspace', disconnect: 'Disconnect', sync: 'Sync reading notes', learned: 'Retained video notes', clearReadings: 'Clear content memory',
+          workspaces: 'Separate persona for each workspace', shared: 'All workspaces use the shared persona below; individual conversation personas take precedence.', isolated: 'Each workspace has its own style and learning; individual conversation personas take precedence.', noWorkspace: 'Open a workspace in DSH, then refresh.', legacyConversation: 'Personas are currently separate by conversation. Adjust them beside the input, or check this option to separate by workspace.', useShared: 'Use a shared persona', inactiveWorkspace: 'This workspace previously used the shared persona.', useWorkspace: 'Use this workspace persona', profileName: 'Persona name', guidance: 'Style guidance', guidanceHint: 'For example: concise and efficient, lead with a plan, and retain independent judgment.',
         }
         var openState = react.useState(false), dataState = react.useState(null), busyState = react.useState(false), errorState = react.useState('')
         var textState = react.useState('')
+        var groupsState = react.useState({})
         var data = dataState[0], busy = busyState[0]
         var personaPending = data ? data.generalPending || [] : []
         var control = { font: 'inherit', fontSize: '12px', padding: '6px 8px', border: '1px solid var(--dsw-alias-border-l2, #666)', borderRadius: '7px', ...selectColors }
@@ -242,18 +241,19 @@ window.__ModuleLoader__.load({
         async function request(body, target, scope) {
           busyState[1](true); errorState[1]('')
           try {
-            var selected = body && body.action === 'set-scope' ? '' : target === undefined ? data && data.sharing && data.sharing.selectedId : target
-            var viewScope = body && body.action === 'set-scope' ? '' : scope || (data && data.sharing && data.sharing.defaultMode && data.sharing.mode !== data.sharing.defaultMode ? data.sharing.mode : '')
+            var switching = body && ['set-scope', 'set-workspaces'].includes(body.action)
+            var selected = switching ? '' : workspace ? workspace.id : target === undefined ? data && data.sharing && data.sharing.selectedId : target
+            var viewScope = switching ? '' : workspace ? 'workspace' : scope || (data && data.sharing && data.sharing.defaultMode && data.sharing.mode !== data.sharing.defaultMode ? data.sharing.mode : '')
             var query = (selected ? 'target=' + encodeURIComponent(selected) : '') + (viewScope ? (selected ? '&' : '') + 'scope=' + encodeURIComponent(viewScope) : '')
             var response = await fetch('/api/evo-subagent/persona' + (query ? '?' + query : ''), { method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
               ...(body ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ revision: data && data.revision, sharingRevision: data && data.sharing && data.sharing.revision, ...body }) } : {}) })
             var result = await response.json()
             if (!response.ok) throw new Error(result.error || 'HTTP ' + response.status)
-            dataState[1](result); if (target !== undefined || (body && ['add', 'set-scope'].includes(body.action))) textState[1]('')
+            dataState[1](result); if (target !== undefined || (body && ['add', 'set-scope', 'set-workspaces'].includes(body.action))) textState[1]('')
           } catch (error) { dataState[1](null); errorState[1](noteFrom(error, t.error)) }
           finally { busyState[1](false) }
         }
-        react.useEffect(() => { if (openState[0]) request() }, [openState[0]])
+        react.useEffect(() => { if (workspace || openState[0]) request() }, [openState[0], workspace && workspace.id])
         function select(label, value, values, change) {
           return h('label', { style: { display: 'grid', gap: '5px', minWidth: 0 } }, label,
             h('select', { 'aria-label': label, value, disabled: busy, onChange: event => change(event.target.value), style: input },
@@ -265,21 +265,7 @@ window.__ModuleLoader__.load({
           return h('div', null, h('h4', null, t[target]), h('p', { style: { overflowWrap: 'anywhere' } }, summary),
             h('button', { type: 'button', style: button, disabled: busy, onClick: () => { if (window.confirm(t.confirmForget)) request({ action: 'forget-general', target }) } }, t.remove))
         }
-        return h(Section, { id: 'persona', title: t.title, hint: t.hint, open: openState[0], onToggle: () => openState[1](!openState[0]) },
-          openState[0] ? h('div', { style: { fontSize: '13px', lineHeight: 1.6 } },
-            h('p', null, t.privacy),
-            h('button', { type: 'button', style: button, disabled: busy, onClick: () => request() }, busy ? t.loading : t.reload),
-            errorState[0] ? h('p', { role: 'alert' }, errorState[0]) : null,
-            data ? h(ScopeControl, { sharing: data.sharing, zh, busy, onScope: scope => request({ action: 'set-scope', scope }), onTarget: target => request(undefined, target) }) : null,
-            data && data.sharing && data.sharing.workspaceOptions ? h('details', { style: { margin: '12px 0' } }, h('summary', null, t.workspaces),
-              h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' } }, data.sharing.workspaceOptions.map(w => h('button', { key: w.id, type: 'button', disabled: busy, style: button,
-                onClick: () => request(undefined, w.id, 'workspace') }, w.label)))) : null,
-            data && !data.scopeOnly ? h('div', null,
-              data.sharing && data.sharing.mode === 'workspace' ? h('div', null,
-                h('strong', null, (data.sharing.options.find(w => w.id === data.sharing.selectedId) || {}).label),
-                h('label', { style: { display: 'block', margin: '10px 0' } }, h('input', { type: 'checkbox', checked: data.sharing.appliedMode === 'workspace', disabled: busy,
-                  onChange: event => request({ action: 'assign', kind: 'workspace', target: data.sharing.selectedId, mode: event.target.checked ? 'workspace' : 'global' }) }), ' ', t.independent),
-                h('p', { style: { opacity: 0.7, fontSize: '12px' } }, t.isolated)) : null,
+        var editor = data && !data.scopeOnly && (!workspace || data.sharing.appliedMode === 'workspace') ? h('div', null,
               h('p', { role: 'status', style: { opacity: 0.7, fontSize: '12px' } }, !data.config.enabled ? t.off : !data.config.learning ? t.paused : t.ready),
               ['enabled', 'learning'].map(key => h('label', { key, style: { display: 'block', margin: '10px 0' } }, h('input', { type: 'checkbox', checked: data.config[key], disabled: busy || (key === 'learning' && !data.config.enabled),
                 onChange: event => request({ action: 'configure', [key]: event.target.checked }) }), ' ', t[key])),
@@ -302,17 +288,27 @@ window.__ModuleLoader__.load({
               h('div', { style: { display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' } },
                 h('button', { type: 'button', style: button, disabled: busy || !data.previous, onClick: () => request({ action: 'rollback' }) }, t.rollback),
                 h('button', { type: 'button', style: button, disabled: busy, onClick: () => { if (window.confirm(t.confirmClear)) request({ action: 'clear-observations' }) } }, t.clear))),
-              data.sharing && data.sharing.mode === 'workspace' ? h('details', { style: { marginTop: '12px' } }, h('summary', null, t.biliTitle),
-                h('p', null, t.biliHint),
-                data.bili && data.bili.error ? h('p', { role: 'alert' }, data.bili.error) : null,
-                data.bili && data.bili.available ? h('div', null,
-                  h('button', { type: 'button', style: button, disabled: busy || !data.config.enabled || data.sharing.appliedMode !== 'workspace', onClick: () => request({ action: data.bili.connected ? 'bili-disconnect' : 'bili-connect' }) }, data.bili.connected ? t.disconnect : t.connect), ' ',
-                  data.bili.connected ? h('button', { type: 'button', style: button, disabled: busy, onClick: () => request({ action: 'bili-sync' }) }, t.sync) : null) : h('p', null, t.biliMissing),
-                h('p', null, t.learned + ': ' + (data.readings || []).length),
-                (data.readings || []).length ? h('button', { type: 'button', style: button, disabled: busy, onClick: () => request({ action: 'clear-readings' }) }, t.clearReadings) : null) : null,
-            ) : null,
-          ) : null,
-        )
+            ) : null
+        var feedback = h('div', null,
+          errorState[0] ? h('p', { role: 'alert' }, errorState[0]) : null,
+          busy ? h('p', { role: 'status' }, t.loading) : null)
+        if (workspace) return h('div', { 'data-evo-workspace-persona': workspace.id }, feedback,
+          data && data.sharing.appliedMode !== 'workspace' ? h('div', null, h('p', null, t.inactiveWorkspace),
+            h('button', { type: 'button', style: button, disabled: busy, onClick: () => request({ action: 'assign', kind: 'workspace', target: workspace.id, mode: 'workspace' }) }, t.useWorkspace)) : editor)
+        var defaultMode = data && (data.sharing ? data.sharing.defaultMode || data.sharing.mode : 'global')
+        var workspaces = data && data.sharing && data.sharing.workspaceOptions || []
+        return h(Section, { id: 'persona', title: t.title, hint: t.hint, open: openState[0], onToggle: () => openState[1](!openState[0]) },
+          openState[0] ? h('div', { style: { fontSize: '13px', lineHeight: 1.6 } },
+            h('p', null, t.privacy),
+            h('button', { type: 'button', style: button, disabled: busy, onClick: () => request() }, t.reload), feedback,
+            data ? h('div', { style: { margin: '12px 0' } },
+              h('label', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                h('input', { type: 'checkbox', checked: defaultMode === 'workspace', disabled: busy, onChange: event => request({ action: 'set-workspaces', enabled: event.target.checked }) }), t.workspaces),
+              h('p', { style: { fontSize: '12px', opacity: 0.7 } }, defaultMode === 'conversation' ? t.legacyConversation : defaultMode === 'workspace' ? t.isolated : t.shared),
+              defaultMode === 'conversation' ? h('button', { type: 'button', style: button, disabled: busy, onClick: () => request({ action: 'set-workspaces', enabled: false }) }, t.useShared) : null) : null,
+            defaultMode === 'workspace' ? (workspaces.length ? workspaces.map(w => h(Section, { key: w.id, id: 'persona-workspace-' + w.id, title: w.label, hint: '', open: !!groupsState[0][w.id],
+              onToggle: () => groupsState[1](previous => ({ ...previous, [w.id]: !previous[w.id] })) }, groupsState[0][w.id] ? h(PersonaCard, { key: w.id + ':' + data.sharing.revision, workspace: w }) : null)) : h('p', null, t.noWorkspace)) : defaultMode === 'global' ? editor : null,
+          ) : null)
       }
     }
 
@@ -335,6 +331,7 @@ window.__ModuleLoader__.load({
         }
         var openState = react.useState(false), dataState = react.useState(null), noteState = react.useState('')
         var busyState = react.useState(false), draftState = react.useState({}), editingState = react.useState(false)
+        var pendingState = react.useState(false)
         var open = openState[0], data = dataState[0], busy = busyState[0]
         var buttonStyle = { font: 'inherit', fontSize: '12px', color: 'inherit', background: 'transparent', border: '1px solid var(--dsw-alias-border-l2, #666)', borderRadius: '7px', padding: '5px 9px', cursor: 'pointer' }
         var inputStyle = { width: '100%', boxSizing: 'border-box', font: 'inherit', color: 'inherit', background: 'transparent', border: '1px solid var(--dsw-alias-border-l2, #666)', borderRadius: '7px', padding: '7px', fontSize: '12px' }
@@ -386,11 +383,11 @@ window.__ModuleLoader__.load({
                   value: draftState[0].summary === undefined ? data.generalSummary || '' : draftState[0].summary, onChange: event => edit('summary', event.target.value) }),
                 h('button', { type: 'button', disabled: busy, style: buttonStyle, onClick: () => change('replace-summary', { summary: draftState[0].summary === undefined ? data.generalSummary || '' : draftState[0].summary }) }, t.save), ' ',
                 h('button', { type: 'button', disabled: busy, style: buttonStyle, onClick: () => { editingState[1](false); draftState[1]({}) } }, t.cancel)) : null,
-              data.generalPendingCount ? h('details', { style: { marginTop: '14px' } }, h('summary', null, t.pending),
+              data.generalPendingCount ? h('div', { style: { marginTop: '14px' } }, h(Section, { id: 'habits-pending', title: t.pending, open: pendingState[0], onToggle: () => pendingState[1](!pendingState[0]) }, pendingState[0] ? h('div', null,
                 h('textarea', { 'aria-label': t.pending, maxLength: 960, disabled: busy, style: { ...inputStyle, ...selectColors, minHeight: '90px', marginTop: '8px', resize: 'vertical' },
                   value: draftState[0].pending === undefined ? data.pendingSummary : draftState[0].pending, onChange: event => edit('pending', event.target.value) }),
                 h('button', { type: 'button', disabled: busy, style: buttonStyle, onClick: () => change('approve-summary', { summary: draftState[0].pending === undefined ? data.pendingSummary : draftState[0].pending }) }, t.approve), ' ',
-                h('button', { type: 'button', disabled: busy, style: buttonStyle, onClick: () => change('reject-summary') }, t.reject)) : null,
+                h('button', { type: 'button', disabled: busy, style: buttonStyle, onClick: () => change('reject-summary') }, t.reject)) : null)) : null,
             ) : null,
           ) : null,
         )
@@ -1286,13 +1283,13 @@ window.__ModuleLoader__.load({
       return function ConversationPersona({ sessionId }) {
         var zh = useInterfaceLanguage(react, localeRef) === 'zh'
         var t = zh ? {
-          title: '人格', enabled: '启用此人格', scope: '人格适用范围', inherit: '跟随默认设置', workspace: '工作区独立', conversation: '仅此对话独立',
+          title: '人格', enabled: '启用此人格', scope: '人格适用范围', inherit: '跟随工作区', conversation: '仅此对话独立',
           preset: '风格预设', mode: '相处方式', fixed: '固定预设', explore: '自适应风格', learning: '允许当前范围独立学习',
           warm: '温和陪伴', calm: '理性沉稳', playful: '轻松幽默', direct: '高效利落', guide: '细致引导',
           name: '人格名称', guidance: '风格要求', isolated: '人格调整与学习只留在所选范围，不更新全局人格。',
           shared: '正在使用共享人格。选择独立范围后，可在这里单独调整风格。', usage: '开启学习会在后台处理对话摘录并产生额外模型用量。', error: '人格设置失败', loading: '加载中…',
         } : {
-          title: 'Persona', enabled: 'Enable this persona', scope: 'Persona scope', inherit: 'Follow defaults', workspace: 'Independent workspace', conversation: 'This conversation only',
+          title: 'Persona', enabled: 'Enable this persona', scope: 'Persona scope', inherit: 'Follow workspace settings', conversation: 'This conversation only',
           preset: 'Style preset', mode: 'Interaction style', fixed: 'Fixed preset', explore: 'Adaptive style', learning: 'Allow learning within this scope',
           warm: 'Warm companion', calm: 'Calm and rational', playful: 'Light and playful', direct: 'Efficient and direct', guide: 'Patient guide',
           name: 'Persona name', guidance: 'Style guidance', isolated: 'Persona changes and learning stay in the selected scope without updating the global persona.',
@@ -1330,7 +1327,7 @@ window.__ModuleLoader__.load({
             h('strong', null, t.title), busy ? h('p', null, t.loading) : null, errorState[0] ? h('p', { role: 'alert' }, errorState[0]) : null,
             data && data.context ? h('div', null,
               h('div', { style: { opacity: 0.65, marginTop: '5px', overflowWrap: 'anywhere' } }, data.context.workspace),
-              select(t.scope, data.context.scope === 'global' ? 'inherit' : data.context.scope, [['inherit', t.inherit], ['workspace', t.workspace], ['conversation', t.conversation]], scope => request({ action: 'set-context', scope })),
+              select(t.scope, data.context.override === 'conversation' ? 'conversation' : 'inherit', [['inherit', t.inherit], ['conversation', t.conversation]], scope => request({ action: 'set-context', scope })),
               data.context.independent ? h('div', null,
                 h('p', { style: { opacity: 0.7, lineHeight: 1.5 } }, t.isolated),
                 h('label', { style: { display: 'block', margin: '8px 0' } }, h('input', { type: 'checkbox', checked: data.config.enabled, disabled: busy,
@@ -1367,7 +1364,7 @@ window.__ModuleLoader__.load({
       ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
         name: 'settings.plugins.tab',
         id: 'evo-subagent',
-        label: 'evo-subagent',
+        label: 'dsh-evo-subagent',
         order: 31,
       }, Card))
       if (available.persona) {

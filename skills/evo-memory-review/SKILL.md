@@ -1,6 +1,6 @@
 ---
 name: evo-memory-review
-description: Review and curate an evo-subagent role's prefercmd.md and memory.md using evidence from actual runs. Use when evolution entries are stale, duplicated, contradictory, or too noisy.
+description: Review and curate a dsh-evo-subagent role's prefercmd.md and memory.md using evidence from actual runs. Use when evolution entries are stale, duplicated, contradictory, or too noisy.
 ---
 
 # Evo memory review

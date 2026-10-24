@@ -1,10 +1,10 @@
 - insert:
     - id: evo-persona
-      name: evo-subagent/persona
+      name: dsh-evo-subagent/persona
     - id: evo-user-habits
-      name: evo-subagent/habits
+      name: dsh-evo-subagent/habits
     - id: evo-subagent
-      name: evo-subagent
+      name: dsh-evo-subagent
       config:
         bindingsDir: !!js process.env.EVO_SUBAGENT_BINDINGS_DIR || process.env.DSH_AGENT_BINDINGS_DIR || 'agents'
         evolutionDir: !!js process.env.EVO_SUBAGENT_EVOLUTION_DIR || ''

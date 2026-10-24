@@ -1,6 +1,6 @@
 ---
 name: evo-route-doctor
-description: Diagnose evo-subagent provider/model routing and workspace binding failures in DeepSeek Harness. Use when a child runs on the wrong model, inherits unexpectedly, or fails before starting.
+description: Diagnose dsh-evo-subagent provider/model routing and workspace binding failures in DeepSeek Harness. Use when a child runs on the wrong model, inherits unexpectedly, or fails before starting.
 ---
 
 # Evo route doctor

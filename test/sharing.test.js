@@ -202,7 +202,7 @@ test('observer writes only the selected profile and checks both scope and device
 })
 
 test('new completed human turns reach the correct scoped observer through the real DSH session feed', async t => {
-  const { ctx, policy, profiles, a1, a2, calls } = await fixture(t), p = profiles('persona')
+  const { ctx, policy, profiles, a1, a2, calls, api } = await fixture(t), p = profiles('persona')
   await setMode(policy, 'persona', 'conversation')
   const selected = p.current({ session: a1 }).store
   await configure(selected, { enabled: true })
@@ -213,7 +213,12 @@ test('new completed human turns reach the correct scoped observer through the re
   a1.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
   ctx.emit('agent/status', { agent, status: 'idle' })
   const deadline = Date.now() + 2500
-  while (selected.read().generation < 3) { assert.ok(Date.now() < deadline, 'scoped observer did not settle'); await new Promise(resolve => setTimeout(resolve, 10)) }
+  while (true) {
+    const runtime = (await api('persona', 'GET', undefined, p.current({ session: a1 }).id)).body.runtime
+    if (calls.length === 1 && !runtime.running && runtime.queued === 0) break
+    assert.ok(Date.now() < deadline, 'scoped observer did not settle')
+    await new Promise(resolve => setTimeout(resolve, 10))
+  }
   assert.equal(calls.length, 1)
   assert.equal(selected.read().stats.turns, 1)
   assert.equal(p.current({ session: a2 }).store.read().stats.turns, 0)
@@ -242,6 +247,42 @@ test('workspace overrides coexist with global defaults and custom guidance is ap
   assert.match(prompt, /Efficient colleague/)
   const stale = await api('persona', 'POST', { action: 'assign', kind: 'workspace', target, mode: 'global', sharingRevision: 'old' }, target, { scope: 'workspace' })
   assert.equal(stale.status, 409)
+})
+
+test('the workspace checkbox retains profiles and independent conversations when toggled', async t => {
+  const { api, profiles, policy, a1, a2, b1, home } = await fixture(t), p = profiles('persona')
+  const global = new PersonaStore(personaPath(home))
+  await configure(global, { enabled: true, preset: 'playful' })
+  const globalRevision = global.read().revision, habitsRevision = policy.snapshot('habits').revision
+  const workspace = p.describe(a1, 'workspace'), conversation = p.describe(a2, 'conversation')
+  await policy.assign('persona', 'workspace', workspace.id, 'global', policy.snapshot('persona').revision)
+  await policy.assign('persona', 'conversation', conversation.id, 'conversation', policy.snapshot('persona').revision)
+  const chatProfile = p.current({ session: a2 }).store
+  await configure(chatProfile, { enabled: true, preset: 'warm' })
+  const chatRevision = chatProfile.read().revision, oldRevision = policy.snapshot('persona').revision
+  let response = await api('persona', 'POST', { action: 'set-workspaces', enabled: true, sharingRevision: oldRevision })
+  assert.equal(response.status, 200); assert.equal(response.body.scopeOnly, true)
+  assert.equal(response.body.sharing.workspaceOptions.length, 2)
+  assert.deepEqual(policy.snapshot('persona').assignments.workspace, {})
+  assert.equal(p.current({ session: a1 }).mode, 'workspace')
+  assert.equal(p.current({ session: b1 }).mode, 'workspace')
+  assert.equal(p.current({ session: a2 }).mode, 'conversation')
+  const workspaceProfile = p.current({ session: a1 }).store
+  await configure(workspaceProfile, { enabled: true, preset: 'direct', instructions: 'Keep this project concise.' })
+  const workspaceRevision = workspaceProfile.read().revision, current = policy.snapshot('persona').revision
+  assert.equal((await api('persona', 'POST', { action: 'set-workspaces', enabled: false, sharingRevision: oldRevision })).status, 409)
+  assert.equal((await api('persona', 'POST', { action: 'set-workspaces', enabled: 'false', sharingRevision: current })).status, 400)
+  response = await api('persona', 'POST', { action: 'set-workspaces', enabled: false, sharingRevision: current })
+  assert.equal(response.status, 200); assert.equal(response.body.config.preset, 'playful')
+  assert.equal(p.current({ session: a1 }).mode, 'global')
+  assert.equal(p.current({ session: b1 }).mode, 'global')
+  assert.equal(p.current({ session: a2 }).store.read().revision, chatRevision)
+  assert.equal(workspaceProfile.read().revision, workspaceRevision)
+  assert.equal(global.read().revision, globalRevision)
+  assert.equal(policy.snapshot('habits').revision, habitsRevision)
+  response = await api('persona', 'POST', { action: 'set-workspaces', enabled: true, sharingRevision: response.body.sharing.revision })
+  assert.equal(response.status, 200)
+  assert.equal(p.current({ session: a1 }).store.read().revision, workspaceRevision)
 })
 
 test('composer scope controls hot-switch between workspace and conversation personas without changing the global profile', async t => {
@@ -321,27 +362,27 @@ test('Bilibili headless prompts labelled as user input cannot train or read the 
   ctx.emit('agent/status', { agent, status: 'idle' })
 })
 
-test('owner API links video knowledge only to an explicitly isolated workspace and hot-updates the upstream persona', async t => {
-  const { home, api, profiles, a1 } = await fixture(t), p = profiles('persona'), target = p.describe(a1, 'workspace').id
+test('deferred Bilibili endpoints cannot link, import notes or change the upstream account configuration', async t => {
+  const { home, api, profiles, a1, ctx } = await fixture(t), p = profiles('persona'), target = p.describe(a1, 'workspace').id
   const source = join(home, 'bili-duty'); await mkdir(join(source, 'out'), { recursive: true })
-  await writeFile(join(source, 'config.json'), JSON.stringify({ workspace: '', personaPrompt: '', autoComment: false, dmMode: 'off' }))
-  await writeFile(join(source, 'out', '2026-10-24.md'), '### BV1xx411c7mD\nEvaluate calibration using a separate held-out sample.\n')
+  const original = JSON.stringify({ workspace: '', personaPrompt: 'Original style.', autoComment: false, dmMode: 'off' })
+  await writeFile(join(source, 'config.json'), original)
+  await writeFile(join(source, 'out', '2026-10-24.md'), '### BV1xx411c7mD\nUnreleased content must not be imported.\n')
   let state = (await api('persona', 'GET', undefined, target, { scope: 'workspace' })).body
-  assert.equal((await api('persona', 'POST', { action: 'bili-connect', revision: state.revision, sharingRevision: state.sharing.revision }, target, { scope: 'workspace' })).status, 400)
   state = (await api('persona', 'POST', { action: 'assign', kind: 'workspace', target, mode: 'workspace', sharingRevision: state.sharing.revision }, target, { scope: 'workspace' })).body
-  let saved = await api('persona', 'POST', { action: 'bili-connect', revision: state.revision, sharingRevision: state.sharing.revision }, target, { scope: 'workspace' })
-  assert.equal(saved.status, 200); assert.equal(saved.body.bili.connected, true)
-  assert.equal(saved.body.readings.length, 1)
-  state = saved.body
-  saved = await api('persona', 'POST', { action: 'configure', revision: state.revision, sharingRevision: state.sharing.revision, title: 'Independent scientist' }, target, { scope: 'workspace' })
-  assert.equal(saved.status, 200)
-  let upstream = JSON.parse(await readFile(join(source, 'config.json'), 'utf8'))
-  assert.match(upstream.personaPrompt, /Independent scientist/)
-  assert.match(upstream.personaPrompt, /held-out sample/)
-  assert.equal(upstream.autoComment, false); assert.equal(upstream.dmMode, 'off')
-  state = saved.body
-  saved = await api('persona', 'POST', { action: 'bili-disconnect', revision: state.revision, sharingRevision: state.sharing.revision }, target, { scope: 'workspace' })
-  assert.equal(saved.status, 200)
-  upstream = JSON.parse(await readFile(join(source, 'config.json'), 'utf8'))
-  assert.equal(upstream.personaPrompt, '')
+  const store = p.current({ session: a1 }).store
+  await store.change(state.revision, current => {
+    current.readings.push({ id: 'BV1xx411c7mD', day: '2026-10-24', note: 'Previously saved video note.', digest: 'a'.repeat(64) })
+  })
+  state = store.read()
+  for (const action of ['bili-connect', 'bili-sync', 'bili-disconnect']) {
+    const result = await api('persona', 'POST', { action, revision: state.revision, sharingRevision: p.policy.snapshot('persona').revision }, target, { scope: 'workspace' })
+    assert.equal(result.status, 409); assert.match(result.body.error, /deferred/)
+  }
+  assert.equal(await readFile(join(source, 'config.json'), 'utf8'), original)
+  assert.equal(store.read().revision, state.revision)
+  assert.equal(store.read().readings.length, 1)
+  const prompt = renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: { session: a1 } }))
+  assert.ok(!prompt.includes('Previously saved video note'))
+  assert.equal((await api('persona', 'GET', undefined, target, { scope: 'workspace' })).body.bili, undefined)
 })
